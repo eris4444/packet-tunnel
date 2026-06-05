@@ -11,7 +11,7 @@
 
 *KCP-based raw socket tunnel for firewall / DPI bypass*
 
-[فارسی](./README.fa.md) · [Telegram](https://t.me/erisrttg) · [Report Bug](https://github.com/eris4444/packet-tunnel/issues)
+[فارسی](./Readme.fa.md) · [Telegram](https://t.me/erisrttg) · [Report Bug](https://github.com/eris4444/packet-tunnel/issues)
 
 </div>
 
