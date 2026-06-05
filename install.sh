@@ -18,13 +18,44 @@ PANEL_PORT="7777"
 PANEL_USER="admin"
 PANEL_PASS="$(tr -dc 'A-Za-z0-9!@#' </dev/urandom 2>/dev/null | head -c 16 || echo "Admin$(date +%s)")"
 
+# ══════════════════════════════════════════════════════════════
+#  PIP MIRRORS — ایران + آسیا + اروپا + آمریکا
+#  ترتیب: ایران اول، بقیه به عنوان fallback
+# ══════════════════════════════════════════════════════════════
 PIP_MIRRORS=(
-    "https://mirrors.chpc.ac.ir/pypi/simple"
-    "https://repo.iut.ac.ir/repo/pypi/simple"
-    "https://pypi.tuna.tsinghua.edu.cn/simple"
-    "https://mirror.sjtu.edu.cn/pypi/web/simple"
-    "https://mirrors.aliyun.com/pypi/simple"
-    "https://ftp.iij.ad.jp/pub/pypi/simple"
+    # ── ایران ──────────────────────────────────────────────────
+    "https://mirrors.chpc.ac.ir/pypi/simple"        # مرکز HPC ایران
+    "https://repo.iut.ac.ir/repo/pypi/simple"       # دانشگاه صنعتی اصفهان
+    "https://mirror.aut.ac.ir/pypi/simple"           # دانشگاه صنعتی امیرکبیر
+    "https://pypi.iau.ir/simple"                     # دانشگاه آزاد
+    "https://repo.sharif.ir/pypi/simple"             # دانشگاه صنعتی شریف
+    # ── چین ────────────────────────────────────────────────────
+    "https://pypi.tuna.tsinghua.edu.cn/simple"       # Tsinghua University
+    "https://mirror.sjtu.edu.cn/pypi/web/simple"     # Shanghai Jiao Tong
+    "https://mirrors.aliyun.com/pypi/simple"         # Alibaba Cloud
+    "https://mirrors.cloud.tencent.com/pypi/simple"  # Tencent Cloud
+    "https://mirrors.huaweicloud.com/repository/pypi/simple" # Huawei Cloud
+    "https://mirrors.163.com/pypi/simple"            # NetEase 163
+    "https://mirrors.bfsu.edu.cn/pypi/simple"        # Beijing Foreign Studies Univ
+    "https://pypi.mirrors.ustc.edu.cn/simple"        # Univ of Sci & Tech China
+    "https://mirrors.zju.edu.cn/pypi/simple"         # Zhejiang University
+    # ── ژاپن ───────────────────────────────────────────────────
+    "https://ftp.iij.ad.jp/pub/pypi/simple"          # IIJ Japan
+    "https://mirrors.gigenet.com/pypi/simple"        # GigeNET Japan
+    # ── کره ────────────────────────────────────────────────────
+    "https://ftp.kaist.ac.kr/pypi/simple"            # KAIST Korea
+    # ── روسیه ──────────────────────────────────────────────────
+    "https://mirror.yandex.ru/mirrors/pypi/simple"   # Yandex Russia
+    "https://mirrors.xtom.ru/pypi/simple"            # xTom Russia
+    # ── اروپا ──────────────────────────────────────────────────
+    "https://pypi.ircam.fr/simple"                   # IRCAM France
+    "https://mirrors.xtom.de/pypi/simple"            # xTom Germany
+    "https://mirror.init7.net/pypi/simple"           # Init7 Switzerland
+    "https://mirrors.xtom.nl/pypi/simple"            # xTom Netherlands
+    "https://pypi.fusioned.net/simple"               # Fusioned UK
+    # ── آمریکا ─────────────────────────────────────────────────
+    "https://mirrors.xtom.com/pypi/simple"           # xTom USA
+    "https://pypi.org/simple"                        # PyPI اصلی (آخرین تلاش)
 )
 
 # ════════════════════════════════════════════════════════════════
@@ -100,23 +131,28 @@ install_deps() {
     echo -e "${GREEN}[✓] System dependencies installed${NC}"
 }
 
-# ── Find working pip mirror ─────────────────────────────────────
+# ── Find first working pip mirror ──────────────────────────────
 find_pip_mirror() {
-    if curl -fsSL --max-time 5 "https://pypi.org/simple/pip/" >/dev/null 2>&1; then
-        echo ""; return
-    fi
-    echo -e "${YELLOW}[!] pypi.org unreachable, testing mirrors...${NC}" >&2
+    local total=${#PIP_MIRRORS[@]}
+    local tried=0
+
+    echo -e "${CYAN}[*] Finding fastest pip mirror (${total} candidates)...${NC}" >&2
+
     for mirror in "${PIP_MIRRORS[@]}"; do
-        local host; host=$(echo "$mirror" | cut -d/ -f3)
-        echo -n "    ↳ ${host} ... " >&2
-        if curl -fsSL --max-time 5 "$mirror" >/dev/null 2>&1; then
-            echo -e "${GREEN}OK${NC}" >&2
-            echo "$mirror"; return
+        ((tried++))
+        local host; host=$(echo "$mirror" | awk -F/ '{print $3}')
+        printf "    [%2d/%d] %-45s " "$tried" "$total" "$host" >&2
+        if curl -fsSL --max-time 4 "$mirror" >/dev/null 2>&1; then
+            echo -e "${GREEN}✓${NC}" >&2
+            echo "$mirror"
+            return
         else
-            echo -e "${RED}fail${NC}" >&2
+            echo -e "${RED}✗${NC}" >&2
         fi
     done
-    echo ""
+
+    echo "" # all failed
+    echo -e "${RED}[✗] All mirrors failed.${NC}" >&2
 }
 
 # ── Setup Python environment ────────────────────────────────────
@@ -135,7 +171,7 @@ setup_python() {
         return
     fi
 
-    # Strategy 2: venv + pip (with mirror fallback for Iran)
+    # Strategy 2: venv + pip with mirror
     echo -e "${CYAN}[*] Creating virtual environment...${NC}"
     python3 -m venv "$PANEL_DIR/venv" 2>/dev/null || {
         apt-get install -y python3-venv 2>/dev/null || true
@@ -147,14 +183,14 @@ setup_python() {
 
     echo -e "${CYAN}[*] Installing Python packages...${NC}"
     if [ -n "$mirror" ]; then
-        local host; host=$(echo "$mirror" | cut -d/ -f3)
+        local host; host=$(echo "$mirror" | awk -F/ '{print $3}')
         "$pip" install -q --upgrade pip \
             --index-url "$mirror" --trusted-host "$host" 2>/dev/null || true
         "$pip" install -q flask pyyaml gunicorn \
             --index-url "$mirror" --trusted-host "$host"
     else
-        # Strategy 3: apt fallback for gunicorn, system-site venv
-        echo -e "${YELLOW}[!] No pip mirror available, using apt fallback...${NC}"
+        # Strategy 3: all mirrors failed — apt last resort
+        echo -e "${YELLOW}[!] No mirror reachable. Using apt fallback...${NC}"
         apt-get install -y gunicorn python3-flask python3-yaml 2>/dev/null || true
         rm -rf "$PANEL_DIR/venv"
         python3 -m venv --system-site-packages "$PANEL_DIR/venv"
@@ -171,7 +207,7 @@ _ensure_gunicorn() {
     echo -e "${CYAN}[*] Installing gunicorn...${NC}"
     local mirror; mirror=$(find_pip_mirror)
     if [ -n "$mirror" ]; then
-        local host; host=$(echo "$mirror" | cut -d/ -f3)
+        local host; host=$(echo "$mirror" | awk -F/ '{print $3}')
         "$PANEL_DIR/venv/bin/pip" install -q gunicorn \
             --index-url "$mirror" --trusted-host "$host" 2>/dev/null || \
         apt-get install -y gunicorn 2>/dev/null || true
@@ -185,7 +221,7 @@ _verify_packages() {
     echo -e "${CYAN}[*] Verifying packages...${NC}"
     local ok=1
     for pkg in flask yaml gunicorn; do
-        echo -n "    ↳ $pkg ... "
+        printf "    ↳ %-12s " "$pkg"
         if "$python" -c "import $pkg" 2>/dev/null; then
             echo -e "${GREEN}OK${NC}"
         else
@@ -284,7 +320,7 @@ open_firewall() {
 
 # ── Get public IP ───────────────────────────────────────────────
 get_ip() {
-    for s in ip.sb ipinfo.io/ip checkip.amazonaws.com 2ip.ru; do
+    for s in ip.sb ipinfo.io/ip checkip.amazonaws.com 2ip.ru api.ipify.org; do
         local ip; ip=$(curl -4 -s --max-time 4 "$s" 2>/dev/null | tr -d '[:space:]')
         [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && { echo "$ip"; return; }
     done
