@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Add Server — Erisrtg Panel{% endblock %}
+{% block page_title %}{{ 'افزودن سرور (Kharej)' if session.get('lang') == 'fa' else 'Add Server (Kharej)' }}{% endblock %}
+
+{% block content %}
+{% set lang = session.get('lang', 'en') %}
+
+<div style="max-width:720px" class="fade-in">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><i class="fas fa-server"></i> {{ 'پیکربندی سرور خارجی (Kharej)' if lang == 'fa' else 'Configure External Server (Kharej)' }}</div>
+    </div>
+    <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:24px">
+      {{ 'این تنظیمات برای سرور خارجی (Kharej) است که به عنوان نقطه پایانی VPN عمل می‌کند.' if lang == 'fa' else 'This configures the external (Kharej) server acting as the VPN endpoint.' }}
+    </p>
+
+    <div class="alert alert-info">
+      <i class="fas fa-info-circle"></i>
+      {{ 'شبکه شناسایی‌شده: ' if lang == 'fa' else 'Detected network: ' }}
+      <strong>{{ net.interface }}</strong> — {{ net.local_ip }}
+    </div>
+
+    <form method="POST" action="/add-server">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">{{ 'نام سرویس' if lang == 'fa' else 'Service Name' }} <span class="req">*</span></label>
+          <input type="text" name="name" class="form-control"
+            placeholder="{{ 'مثلاً: myserver1' if lang == 'fa' else 'e.g. myserver1' }}"
+            pattern="[a-zA-Z0-9_-]+" required>
+          <div class="form-hint">{{ 'فقط حروف انگلیسی، اعداد، - و _' if lang == 'fa' else 'Letters, numbers, - and _ only' }}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ 'پورت Listening' if lang == 'fa' else 'Listen Port' }} <span class="req">*</span></label>
+          <input type="number" name="port" class="form-control" value="8888" min="1" max="65535" required>
+          <div class="form-hint">{{ 'پورتی که سرور گوش می‌دهد' if lang == 'fa' else 'Port the server listens on' }}</div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">{{ 'کلید مخفی (Secret Key)' if lang == 'fa' else 'Secret Key' }} <span class="req">*</span></label>
+        <div style="display:flex;gap:8px">
+          <input type="text" name="secret" id="secretKey" class="form-control" value="{{ generated_key }}" required>
+          <button type="button" class="btn btn-secondary" onclick="genKey()" style="white-space:nowrap">
+            <i class="fas fa-sync-alt"></i> {{ 'تولید' if lang == 'fa' else 'Generate' }}
+          </button>
+        </div>
+        <div class="form-hint">{{ 'این کلید را برای تنظیم کلاینت نگه دارید' if lang == 'fa' else 'Save this key to configure clients' }}</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">{{ 'مد KCP' if lang == 'fa' else 'KCP Mode' }}</label>
+          <select name="kcp_mode" class="form-control">
+            <option value="normal">normal — {{ 'سرعت عادی' if lang == 'fa' else 'Normal speed' }}</option>
+            <option value="fast" selected>fast — {{ 'متعادل (توصیه‌شده)' if lang == 'fa' else 'Balanced (recommended)' }}</option>
+            <option value="fast2">fast2 — {{ 'سرعت بالا' if lang == 'fa' else 'High speed' }}</option>
+            <option value="fast3">fast3 — {{ 'حداکثر سرعت' if lang == 'fa' else 'Max speed' }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ 'رمزنگاری' if lang == 'fa' else 'Encryption' }}</label>
+          <select name="encryption" class="form-control">
+            <option value="aes-128-gcm" selected>aes-128-gcm — {{ 'توصیه‌شده' if lang == 'fa' else 'Recommended' }}</option>
+            <option value="aes">aes</option>
+            <option value="aes-128">aes-128</option>
+            <option value="aes-192">aes-192</option>
+            <option value="aes-256">aes-256</option>
+            <option value="none">none — {{ 'بدون رمزنگاری' if lang == 'fa' else 'No encryption' }}</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row-3">
+        <div class="form-group">
+          <label class="form-label">{{ 'تعداد اتصالات' if lang == 'fa' else 'Connections' }}</label>
+          <input type="number" name="conn" class="form-control" value="4" min="1" max="32">
+          <div class="form-hint">1–32</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">MTU</label>
+          <input type="number" name="mtu" class="form-control" value="1150" min="100" max="9000">
+          <div class="form-hint">{{ 'پیش‌فرض: 1150' if lang == 'fa' else 'Default: 1150' }}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">pcap sockbuf</label>
+          <input type="number" name="pcap_sockbuf" class="form-control" placeholder="{{ 'اختیاری' if lang == 'fa' else 'Optional' }}">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">transport tcpbuf</label>
+          <input type="number" name="tcpbuf" class="form-control" placeholder="{{ 'اختیاری' if lang == 'fa' else 'Optional' }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">transport udpbuf</label>
+          <input type="number" name="udpbuf" class="form-control" placeholder="{{ 'اختیاری' if lang == 'fa' else 'Optional' }}">
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div style="display:flex;gap:12px;justify-content:flex-end">
+        <a href="/services" class="btn btn-secondary">{{ 'انصراف' if lang == 'fa' else 'Cancel' }}</a>
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-plus-circle"></i>
+          {{ 'ایجاد سرور' if lang == 'fa' else 'Create Server' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+async function genKey() {
+  const r = await fetch('/api/generate-key');
+  const d = await r.json();
+  document.getElementById('secretKey').value = d.key;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Erisrtg Panel{% endblock %}
+{% block page_title %}{{ 'داشبورد' if session.get('lang') == 'fa' else 'Dashboard' }}{% endblock %}
+
+{% block content %}
+{% set lang = session.get('lang', 'en') %}
+
+<!-- STAT CARDS -->
+<div class="stats-grid fade-in">
+
+  <div class="stat-card fade-in-1">
+    <div class="stat-icon"><i class="fas fa-microchip"></i></div>
+    <div class="stat-value" id="stat-cpu">{{ stats.cpu }}%</div>
+    <div class="stat-label">{{ 'پردازنده' if lang == 'fa' else 'CPU Usage' }}</div>
+    <div class="progress mt-4"><div class="progress-bar" style="width:{{ [stats.cpu|float, 100]|min }}%"></div></div>
+  </div>
+
+  <div class="stat-card fade-in-2">
+    <div class="stat-icon"><i class="fas fa-memory"></i></div>
+    <div class="stat-value" id="stat-mem">{{ stats.mem.split('/')[0] if '/' in stats.mem else stats.mem }} MB</div>
+    <div class="stat-label">{{ 'حافظه' if lang == 'fa' else 'Memory' }}</div>
+    <div class="stat-sub">{{ stats.mem }}</div>
+  </div>
+
+  <div class="stat-card fade-in-3">
+    <div class="stat-icon"><i class="fas fa-hdd"></i></div>
+    <div class="stat-value" id="stat-disk">{{ stats.disk }}</div>
+    <div class="stat-label">{{ 'دیسک' if lang == 'fa' else 'Disk Usage' }}</div>
+  </div>
+
+  <div class="stat-card fade-in-4">
+    <div class="stat-icon"><i class="fas fa-network-wired"></i></div>
+    <div class="stat-value" style="font-size:1rem;">{{ services|length }}</div>
+    <div class="stat-label">{{ 'سرویس‌های فعال' if lang == 'fa' else 'Active Services' }}</div>
+    <div class="stat-sub">
+      {{ services|selectattr('status','equalto','active')|list|length }}
+      {{ 'فعال' if lang == 'fa' else 'running' }}
+    </div>
+  </div>
+
+  <div class="stat-card fade-in-1">
+    <div class="stat-icon"><i class="fas fa-globe"></i></div>
+    <div class="stat-value" style="font-size:.95rem;">{{ stats.public_ip }}</div>
+    <div class="stat-label">{{ 'آی‌پی عمومی' if lang == 'fa' else 'Public IP' }}</div>
+  </div>
+
+  <div class="stat-card fade-in-2">
+    <div class="stat-icon"><i class="fas fa-clock"></i></div>
+    <div class="stat-value" style="font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ stats.uptime }}</div>
+    <div class="stat-label">{{ 'آپتایم' if lang == 'fa' else 'Uptime' }}</div>
+  </div>
+
+  <div class="stat-card fade-in-3">
+    <div class="stat-icon"><i class="fas fa-tachometer-alt"></i></div>
+    <div class="stat-value" id="stat-load" style="font-size:1rem;">{{ stats.load }}</div>
+    <div class="stat-label">{{ 'بار سیستم' if lang == 'fa' else 'Load Average' }}</div>
+  </div>
+
+  <div class="stat-card fade-in-4">
+    <div class="stat-icon" style="background:{% if stats.paqet_installed %}var(--green-bg){% else %}var(--red-bg){% endif %}">
+      <i class="fas fa-cube" style="color:{% if stats.paqet_installed %}var(--green){% else %}var(--red){% endif %}"></i>
+    </div>
+    <div class="stat-value" style="font-size:.85rem;">{{ stats.paqet_version[:16] }}</div>
+    <div class="stat-label">{{ 'نسخه Paqet' if lang == 'fa' else 'Paqet Version' }}</div>
+    {% if not stats.paqet_installed %}
+    <button class="btn btn-primary btn-sm mt-4" onclick="installPaqet(this)">
+      <i class="fas fa-download"></i> {{ 'نصب' if lang == 'fa' else 'Install' }}
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- TWO COLUMN -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;" class="fade-in">
+
+  <!-- System Info -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><i class="fas fa-server"></i> {{ 'اطلاعات سیستم' if lang == 'fa' else 'System Info' }}</div>
+    </div>
+    <table style="width:100%">
+      {% set info = [
+        ('OS', stats.os),
+        ('Kernel', stats.kernel),
+        ('Public IP', stats.public_ip),
+        ('Uptime', stats.uptime),
+      ] %}
+      {% for label, val in info %}
+      <tr style="border-bottom:1px solid var(--border-subtle)">
+        <td style="padding:10px 0;color:var(--text-muted);font-size:.82rem;width:40%">{{ label }}</td>
+        <td style="padding:10px 0;font-size:.83rem;" class="mono">{{ val }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><i class="fas fa-bolt"></i> {{ 'اقدامات سریع' if lang == 'fa' else 'Quick Actions' }}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <a href="/add-server" class="btn btn-primary w-full" style="justify-content:center">
+        <i class="fas fa-plus-circle"></i>
+        {{ 'افزودن سرور (Kharej)' if lang == 'fa' else 'Add Server (Kharej)' }}
+      </a>
+      <a href="/add-client" class="btn btn-secondary w-full" style="justify-content:center">
+        <i class="fas fa-plug"></i>
+        {{ 'افزودن کلاینت (Iran)' if lang == 'fa' else 'Add Client (Iran)' }}
+      </a>
+      <button class="btn btn-warning w-full" style="justify-content:center" onclick="optimizeSysctl()">
+        <i class="fas fa-rocket"></i>
+        {{ 'بهینه‌سازی شبکه' if lang == 'fa' else 'Optimize Network' }}
+      </button>
+      {% if not stats.paqet_installed %}
+      <button class="btn btn-success w-full" style="justify-content:center" onclick="installPaqet(this)">
+        <i class="fas fa-download"></i>
+        {{ 'نصب Paqet Core' if lang == 'fa' else 'Install Paqet Core' }}
+      </button>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- SERVICES TABLE -->
+<div class="card fade-in">
+  <div class="card-header">
+    <div class="card-title"><i class="fas fa-list-ul"></i> {{ 'سرویس‌ها' if lang == 'fa' else 'Services' }}</div>
+    <a href="/services" class="btn btn-secondary btn-sm">
+      {{ 'مشاهده همه' if lang == 'fa' else 'View All' }} <i class="fas fa-arrow-right"></i>
+    </a>
+  </div>
+
+  {% if services %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>{{ 'نام' if lang == 'fa' else 'Name' }}</th>
+          <th>{{ 'وضعیت' if lang == 'fa' else 'Status' }}</th>
+          <th>{{ 'نوع' if lang == 'fa' else 'Type' }}</th>
+          <th>{{ 'مد KCP' if lang == 'fa' else 'KCP Mode' }}</th>
+          <th>{{ 'پورت' if lang == 'fa' else 'Port' }}</th>
+          <th>{{ 'اقدامات' if lang == 'fa' else 'Actions' }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for svc in services[:5] %}
+        <tr>
+          <td>
+            <a href="/services/{{ svc.cfg_name }}" style="color:var(--accent-bright);text-decoration:none;font-weight:600;">
+              {{ svc.cfg_name }}
+            </a>
+          </td>
+          <td>
+            <span class="status-pill pill-{{ svc.status }}">
+              <span class="pill-dot"></span>{{ svc.status }}
+            </span>
+          </td>
+          <td>
+            <span class="badge {% if svc.role == 'server' %}badge-blue{% else %}badge-purple{% endif %}">
+              {{ 'سرور' if lang == 'fa' and svc.role == 'server' else 'کلاینت' if lang == 'fa' else svc.role }}
+            </span>
+          </td>
+          <td><span class="mono" style="font-size:.8rem">{{ svc.mode }}</span></td>
+          <td><span class="mono" style="font-size:.8rem">{{ svc.port }}</span></td>
+          <td>
+            <div style="display:flex;gap:6px">
+              {% if svc.status == 'active' %}
+              <button class="btn btn-warning btn-xs" onclick="svcAction('{{ svc.name }}','restart','Restart')">
+                <i class="fas fa-redo"></i>
+              </button>
+              <button class="btn btn-danger btn-xs" onclick="svcAction('{{ svc.name }}','stop','Stop')">
+                <i class="fas fa-stop"></i>
+              </button>
+              {% else %}
+              <button class="btn btn-success btn-xs" onclick="svcAction('{{ svc.name }}','start','Start')">
+                <i class="fas fa-play"></i>
+              </button>
+              {% endif %}
+              <a href="/services/{{ svc.cfg_name }}" class="btn btn-secondary btn-xs">
+                <i class="fas fa-eye"></i>
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:40px 0;color:var(--text-muted)">
+    <i class="fas fa-server" style="font-size:2.5rem;opacity:.3;display:block;margin-bottom:12px"></i>
+    {{ 'هنوز سرویسی وجود ندارد.' if lang == 'fa' else 'No services yet.' }}
+    <br>
+    <a href="/add-server" class="btn btn-primary mt-4" style="margin-top:14px;display:inline-flex">
+      <i class="fas fa-plus"></i> {{ 'ایجاد اولین سرویس' if lang == 'fa' else 'Create First Service' }}
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+async function installPaqet(btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  const r = await apiCall('/api/install-paqet');
+  showToast(r.ok ? `Paqet ${r.version} installed!` : (r.error || 'Install failed'), r.ok);
+  if (r.ok) setTimeout(() => location.reload(), 1000);
+  else { btn.disabled = false; btn.innerHTML = '<i class="fas fa-download"></i> Install'; }
+}
+async function optimizeSysctl() {
+  const r = await apiCall('/api/optimize/sysctl');
+  showToast(r.ok ? '{{ "شبکه بهینه شد" if lang == "fa" else "Network optimized" }}' : 'Error', r.ok);
+}
+</script>
+{% endblock %}

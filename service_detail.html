@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}{{ svc.cfg_name }} — Erisrtg Panel{% endblock %}
+{% block page_title %}{{ svc.cfg_name }}{% endblock %}
+
+{% block breadcrumb %}
+<div class="breadcrumb">
+  <a href="/dashboard"><i class="fas fa-home"></i></a>
+  <span class="sep">/</span>
+  <a href="/services">{{ 'سرویس‌ها' if session.get('lang') == 'fa' else 'Services' }}</a>
+  <span class="sep">/</span>
+  <span>{{ svc.cfg_name }}</span>
+</div>
+{% endblock %}
+
+{% block content %}
+{% set lang = session.get('lang', 'en') %}
+
+<!-- Header -->
+<div style="display:flex;align-items:center;gap:16px;margin-bottom:24px" class="fade-in">
+  <div style="flex:1">
+    <div style="display:flex;align-items:center;gap:12px">
+      <h2 style="font-size:1.3rem;font-weight:700;font-family:var(--font-mono)">{{ svc.cfg_name }}</h2>
+      <span class="status-pill pill-{{ svc.status }}">
+        <span class="pill-dot"></span>{{ svc.status }}
+      </span>
+      <span class="badge {% if svc.role == 'server' %}badge-blue{% else %}badge-purple{% endif %}">
+        {{ svc.role }}
+      </span>
+    </div>
+    <p style="font-size:.8rem;color:var(--text-muted);margin-top:6px;font-family:var(--font-mono)">
+      {{ svc.name }}.service
+    </p>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    {% if svc.status == 'active' %}
+    <button class="btn btn-warning btn-sm" onclick="svcAction('{{ svc.name }}','restart','Restart')">
+      <i class="fas fa-redo"></i> {{ 'راه‌اندازی مجدد' if lang == 'fa' else 'Restart' }}
+    </button>
+    <button class="btn btn-danger btn-sm" onclick="svcAction('{{ svc.name }}','stop','Stop')">
+      <i class="fas fa-stop"></i> {{ 'توقف' if lang == 'fa' else 'Stop' }}
+    </button>
+    {% else %}
+    <button class="btn btn-success btn-sm" onclick="svcAction('{{ svc.name }}','start','Start')">
+      <i class="fas fa-play"></i> {{ 'شروع' if lang == 'fa' else 'Start' }}
+    </button>
+    {% endif %}
+    <button class="btn btn-danger btn-sm" onclick="deleteSvc('{{ svc.name }}','{{ svc.cfg_name }}')">
+      <i class="fas fa-trash"></i> {{ 'حذف' if lang == 'fa' else 'Delete' }}
+    </button>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px" class="fade-in">
+
+  <!-- Info card -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:16px"><i class="fas fa-info-circle"></i> {{ 'اطلاعات سرویس' if lang == 'fa' else 'Service Info' }}</div>
+    <table style="width:100%">
+      {% set rows = [
+        (('نوع' if lang == 'fa' else 'Role'), svc.role),
+        (('وضعیت' if lang == 'fa' else 'Status'), svc.status),
+        (('فعال‌سازی' if lang == 'fa' else 'Enabled'), svc.enabled),
+        (('مد KCP' if lang == 'fa' else 'KCP Mode'), svc.mode),
+        ('MTU', svc.mtu),
+        (('اتصالات' if lang == 'fa' else 'Connections'), svc.conn),
+        (('پورت' if lang == 'fa' else 'Port'), svc.port),
+      ] %}
+      {% for label, val in rows %}
+      <tr style="border-bottom:1px solid var(--border-subtle)">
+        <td style="padding:9px 0;color:var(--text-muted);font-size:.8rem;width:40%">{{ label }}</td>
+        <td style="padding:9px 0;font-size:.83rem;" class="mono">{{ val or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <!-- Cron card -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:16px"><i class="fas fa-clock"></i> {{ 'راه‌اندازی مجدد خودکار' if lang == 'fa' else 'Auto Restart (Cron)' }}</div>
+    <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:14px">
+      {{ 'یک بازه زمانی انتخاب کنید تا سرویس به طور خودکار راه‌اندازی مجدد شود.' if lang == 'fa' else 'Choose an interval to automatically restart this service.' }}
+    </p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      {% set intervals = ['1min','5min','15min','30min','1hour','12hour','1day'] %}
+      {% for iv in intervals %}
+      <button class="btn btn-secondary btn-sm" onclick="setCron('{{ svc.name }}','{{ iv }}')">
+        {{ iv }}
+      </button>
+      {% endfor %}
+    </div>
+    <div class="divider"></div>
+    <button class="btn btn-danger btn-sm" onclick="setCron('{{ svc.name }}','remove')">
+      <i class="fas fa-times"></i> {{ 'حذف Cron' if lang == 'fa' else 'Remove Cron' }}
+    </button>
+    <p style="font-size:.75rem;color:var(--text-muted);margin-top:10px">
+      {{ 'Cron فعال:' if lang == 'fa' else 'Cron active:' }}
+      <span class="badge {% if svc.has_cron %}badge-green{% else %}badge-red{% endif %}">
+        {{ ('بله' if lang == 'fa' else 'Yes') if svc.has_cron else ('خیر' if lang == 'fa' else 'No') }}
+      </span>
+    </p>
+  </div>
+</div>
+
+<!-- Config editor -->
+<div class="card fade-in mb-6" style="margin-bottom:20px">
+  <div class="card-header">
+    <div class="card-title"><i class="fas fa-file-code"></i> {{ 'پیکربندی YAML' if lang == 'fa' else 'YAML Configuration' }}</div>
+    <button class="btn btn-primary btn-sm" onclick="saveConfig()">
+      <i class="fas fa-save"></i> {{ 'ذخیره و راه‌اندازی مجدد' if lang == 'fa' else 'Save & Restart' }}
+    </button>
+  </div>
+  <textarea id="configEditor" class="form-control" rows="18" style="font-size:.8rem;line-height:1.7">{{ config_raw }}</textarea>
+</div>
+
+<!-- Logs -->
+<div class="card fade-in">
+  <div class="card-header">
+    <div class="card-title"><i class="fas fa-terminal"></i> {{ 'لاگ‌ها' if lang == 'fa' else 'Logs' }}</div>
+    <button class="btn btn-secondary btn-sm" onclick="refreshLogs()">
+      <i class="fas fa-sync-alt"></i> {{ 'بروزرسانی' if lang == 'fa' else 'Refresh' }}
+    </button>
+  </div>
+  <div class="log-box" id="logBox">{{ logs }}</div>
+</div>
+
+<script>
+async function saveConfig() {
+  const content = document.getElementById('configEditor').value;
+  const r = await apiCall('/api/service/{{ svc.cfg_name }}/config', 'POST', {content});
+  if (r.ok) {
+    showToast('{{ "ذخیره شد" if lang == "fa" else "Saved" }}');
+    await apiCall('/api/service/{{ svc.name }}/restart');
+    showToast('{{ "راه‌اندازی مجدد انجام شد" if lang == "fa" else "Restarted" }}');
+    setTimeout(() => location.reload(), 1000);
+  } else showToast('Error: ' + r.error, false);
+}
+
+async function refreshLogs() {
+  const r = await fetch('/api/service/{{ svc.name }}/logs');
+  const d = await r.json();
+  if (d.ok) {
+    document.getElementById('logBox').textContent = d.logs;
+    showToast('{{ "لاگ‌ها بروز شد" if lang == "fa" else "Logs refreshed" }}');
+  }
+}
+
+async function setCron(svcName, interval) {
+  const r = await apiCall(`/api/cron/${svcName}/${interval}`);
+  showToast(r.ok ? '{{ "Cron تنظیم شد" if lang == "fa" else "Cron updated" }}' : 'Error', r.ok);
+  if (r.ok) setTimeout(() => location.reload(), 600);
+}
+
+// Color logs
+document.addEventListener('DOMContentLoaded', () => {
+  const box = document.getElementById('logBox');
+  box.innerHTML = box.textContent
+    .replace(/\berror\b|\bERROR\b|\bfailed\b|\bFAILED\b/g, m => `<span class="log-error">${m}</span>`)
+    .replace(/\bwarn\b|\bWARN\b|\bwarning\b/g, m => `<span class="log-warn">${m}</span>`)
+    .replace(/\binfo\b|\bINFO\b/g, m => `<span class="log-info">${m}</span>`)
+    .replace(/\bstarted\b|\bactive\b|\bsuccess\b/gi, m => `<span class="log-ok">${m}</span>`);
+  box.scrollTop = box.scrollHeight;
+});
+</script>
+{% endblock %}

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="{{ 'fa' if cfg.get('language') == 'fa' else 'en' }}"
+      dir="{{ 'rtl' if cfg.get('language') == 'fa' else 'ltr' }}"
+      data-theme="{{ cfg.get('theme', 'dark') }}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login — Erisrtg Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Vazirmatn:wght@400;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root,[data-theme="dark"]{
+  --bg:#080d1a;--surface:#0d1628;--card:#111d35;
+  --border:#1e3060;--accent:#1a66cc;--accent-b:#2080ff;
+  --accent-g:rgba(32,128,255,.25);--accent-g2:rgba(26,102,204,.12);
+  --text:#e8f0ff;--muted:#8aaccc;--disabled:#4a6080;
+  --red:#ff4466;--red-bg:rgba(255,68,102,.1);
+  --font:'Inter','Vazirmatn',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+[data-theme="light"]{
+  --bg:#eef2f8;--surface:#f5f8ff;--card:#fff;
+  --border:#c8d8f0;--accent:#1a55cc;--accent-b:#1666ee;
+  --accent-g:rgba(26,85,204,.15);--accent-g2:rgba(26,85,204,.07);
+  --text:#0a1628;--muted:#2a4a7a;--disabled:#aabbd0;
+  --red:#cc2244;--red-bg:rgba(204,34,68,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden}
+/* grid bg */
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:
+    linear-gradient(var(--border) 1px,transparent 1px),
+    linear-gradient(90deg,var(--border) 1px,transparent 1px);
+  background-size:50px 50px;opacity:.3;pointer-events:none;
+}
+body::after{
+  content:'';position:fixed;inset:0;
+  background:radial-gradient(ellipse 80% 60% at 50% 50%,
+    rgba(26,102,204,.18) 0%,transparent 70%);
+  pointer-events:none;
+}
+.login-wrap{
+  position:relative;z-index:1;
+  width:100%;max-width:420px;padding:24px;
+}
+.card{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:20px;padding:40px 36px;
+  box-shadow:0 20px 80px rgba(0,0,40,.5);
+}
+.logo{text-align:center;margin-bottom:32px}
+.logo-icon{
+  width:64px;height:64px;margin:0 auto 14px;
+  background:linear-gradient(135deg,var(--accent),#4da0ff);
+  border-radius:18px;display:flex;align-items:center;justify-content:center;
+  font-size:28px;color:#fff;
+  box-shadow:0 0 40px var(--accent-g);
+}
+.logo h1{font-size:1.4rem;font-weight:700;letter-spacing:.5px}
+.logo p{font-size:.8rem;color:var(--muted);margin-top:4px;font-family:var(--mono)}
+.form-group{margin-bottom:18px}
+.form-label{display:block;font-size:.82rem;font-weight:600;color:var(--muted);margin-bottom:7px}
+.input-wrap{position:relative}
+.input-wrap i{
+  position:absolute;top:50%;left:14px;transform:translateY(-50%);
+  color:var(--disabled);font-size:.9rem;
+}
+[dir="rtl"] .input-wrap i{left:auto;right:14px}
+.form-control{
+  width:100%;padding:11px 14px 11px 42px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;color:var(--text);font-size:.88rem;
+  font-family:var(--font);transition:border-color .2s,box-shadow .2s;outline:none;
+}
+[dir="rtl"] .form-control{padding:11px 42px 11px 14px}
+.form-control:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-g2)}
+.form-control::placeholder{color:var(--disabled)}
+.btn-submit{
+  width:100%;padding:13px;border-radius:10px;border:none;
+  background:linear-gradient(135deg,var(--accent),var(--accent-b));
+  color:#fff;font-size:.93rem;font-weight:700;cursor:pointer;
+  transition:opacity .2s,box-shadow .2s;letter-spacing:.3px;
+}
+.btn-submit:hover{opacity:.92;box-shadow:0 8px 32px var(--accent-g)}
+.error-box{
+  background:var(--red-bg);border:1px solid rgba(255,68,102,.25);
+  border-radius:8px;padding:10px 14px;
+  font-size:.83rem;color:var(--red);
+  display:flex;align-items:center;gap:8px;margin-bottom:18px;
+}
+.footer-note{text-align:center;margin-top:20px;font-size:.75rem;color:var(--disabled)}
+.footer-note a{color:var(--accent-b);text-decoration:none}
+.lang-toggle{
+  position:absolute;top:20px;right:20px;z-index:10;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:8px;padding:6px 12px;font-size:.75rem;font-weight:700;
+  color:var(--muted);cursor:pointer;
+}
+[dir="rtl"] .lang-toggle{right:auto;left:20px}
+</style>
+</head>
+<body>
+{% set lang = cfg.get('language', 'en') %}
+
+<button class="lang-toggle" onclick="toggleLang()">
+  {{ 'FA' if lang == 'en' else 'EN' }}
+</button>
+
+<div class="login-wrap">
+  <div class="card">
+    <div class="logo">
+      <div class="logo-icon"><i class="fas fa-network-wired"></i></div>
+      <h1>Erisrtg Panel</h1>
+      <p>Packet Tunnel Management</p>
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <div class="error-box">
+      <i class="fas fa-exclamation-circle"></i>
+      {{ 'نام کاربری یا رمز عبور اشتباه است' if lang == 'fa' else 'Invalid username or password' }}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="/login">
+      <div class="form-group">
+        <label class="form-label">{{ 'نام کاربری' if lang == 'fa' else 'Username' }}</label>
+        <div class="input-wrap">
+          <i class="fas fa-user"></i>
+          <input type="text" name="username" class="form-control"
+            placeholder="{{ 'نام کاربری' if lang == 'fa' else 'Enter username' }}"
+            autocomplete="username" required autofocus>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">{{ 'رمز عبور' if lang == 'fa' else 'Password' }}</label>
+        <div class="input-wrap">
+          <i class="fas fa-lock"></i>
+          <input type="password" name="password" class="form-control"
+            placeholder="{{ 'رمز عبور' if lang == 'fa' else 'Enter password' }}"
+            autocomplete="current-password" required>
+        </div>
+      </div>
+      <button type="submit" class="btn-submit">
+        <i class="fas fa-sign-in-alt"></i>
+        {{ 'ورود به پنل' if lang == 'fa' else 'Sign In' }}
+      </button>
+    </form>
+
+    <div class="footer-note">
+      Erisrtg Packet Tunnel &bull; <a href="https://t.me/erisrttg" target="_blank">@erisrttg</a>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleLang() {
+  const cur = '{{ lang }}';
+  fetch('/settings', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: `action=change_language&language=${cur === 'en' ? 'fa' : 'en'}`
+  }).then(() => location.reload());
+}
+</script>
+</body>
+</html>

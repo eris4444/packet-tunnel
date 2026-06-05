@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Services — Erisrtg Panel{% endblock %}
+{% block page_title %}{{ 'سرویس‌ها' if session.get('lang') == 'fa' else 'Services' }}{% endblock %}
+
+{% block content %}
+{% set lang = session.get('lang', 'en') %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px" class="fade-in">
+  <div>
+    <h2 style="font-size:1.3rem;font-weight:700">{{ 'مدیریت سرویس‌ها' if lang == 'fa' else 'Service Management' }}</h2>
+    <p style="font-size:.82rem;color:var(--text-muted);margin-top:4px">
+      {{ services|length }} {{ 'سرویس یافت شد' if lang == 'fa' else 'services found' }}
+    </p>
+  </div>
+  <div style="display:flex;gap:10px">
+    <a href="/add-server" class="btn btn-primary">
+      <i class="fas fa-plus"></i> {{ 'سرور' if lang == 'fa' else 'Server' }}
+    </a>
+    <a href="/add-client" class="btn btn-secondary">
+      <i class="fas fa-plug"></i> {{ 'کلاینت' if lang == 'fa' else 'Client' }}
+    </a>
+  </div>
+</div>
+
+{% if services %}
+<div class="card fade-in">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>{{ 'نام سرویس' if lang == 'fa' else 'Service Name' }}</th>
+          <th>{{ 'وضعیت' if lang == 'fa' else 'Status' }}</th>
+          <th>{{ 'نوع' if lang == 'fa' else 'Type' }}</th>
+          <th>{{ 'مد KCP' if lang == 'fa' else 'KCP Mode' }}</th>
+          <th>MTU</th>
+          <th>{{ 'اتصالات' if lang == 'fa' else 'Conn' }}</th>
+          <th>{{ 'پورت' if lang == 'fa' else 'Port' }}</th>
+          <th>Cron</th>
+          <th>{{ 'اقدامات' if lang == 'fa' else 'Actions' }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for svc in services %}
+        <tr>
+          <td style="color:var(--text-muted);font-size:.8rem">{{ loop.index }}</td>
+          <td>
+            <a href="/services/{{ svc.cfg_name }}" style="color:var(--accent-bright);text-decoration:none;font-weight:600;font-family:var(--font-mono);">
+              {{ svc.cfg_name }}
+            </a>
+          </td>
+          <td>
+            <span class="status-pill pill-{{ svc.status }}">
+              <span class="pill-dot"></span>{{ svc.status }}
+            </span>
+          </td>
+          <td>
+            <span class="badge {% if svc.role == 'server' %}badge-blue{% else %}badge-purple{% endif %}">
+              {{ svc.role }}
+            </span>
+          </td>
+          <td>
+            <span class="badge {% if svc.mode == 'fast3' %}badge-red{% elif svc.mode == 'fast2' %}badge-yellow{% elif svc.mode == 'fast' %}badge-green{% else %}badge-blue{% endif %} mono">
+              {{ svc.mode }}
+            </span>
+          </td>
+          <td class="mono" style="font-size:.8rem">{{ svc.mtu }}</td>
+          <td class="mono" style="font-size:.8rem">{{ svc.conn }}</td>
+          <td class="mono" style="font-size:.8rem">{{ svc.port }}</td>
+          <td>
+            {% if svc.has_cron %}
+            <span class="badge badge-green"><i class="fas fa-clock"></i></span>
+            {% else %}
+            <span style="color:var(--text-disabled);font-size:.75rem">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">
+              {% if svc.status == 'active' %}
+              <button class="btn btn-warning btn-xs" onclick="svcAction('{{ svc.name }}','restart','Restart')" title="{{ 'راه‌اندازی مجدد' if lang == 'fa' else 'Restart' }}">
+                <i class="fas fa-redo"></i>
+              </button>
+              <button class="btn btn-danger btn-xs" onclick="svcAction('{{ svc.name }}','stop','Stop')" title="{{ 'توقف' if lang == 'fa' else 'Stop' }}">
+                <i class="fas fa-stop"></i>
+              </button>
+              {% else %}
+              <button class="btn btn-success btn-xs" onclick="svcAction('{{ svc.name }}','start','Start')" title="{{ 'شروع' if lang == 'fa' else 'Start' }}">
+                <i class="fas fa-play"></i>
+              </button>
+              {% endif %}
+              <a href="/services/{{ svc.cfg_name }}" class="btn btn-secondary btn-xs" title="{{ 'جزئیات' if lang == 'fa' else 'Details' }}">
+                <i class="fas fa-eye"></i>
+              </a>
+              <button class="btn btn-danger btn-xs" onclick="deleteSvc('{{ svc.name }}','{{ svc.cfg_name }}')" title="{{ 'حذف' if lang == 'fa' else 'Delete' }}">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Bulk actions -->
+<div class="card fade-in mt-4" style="margin-top:20px">
+  <div class="card-title" style="margin-bottom:14px"><i class="fas fa-layer-group"></i> {{ 'اقدامات گروهی' if lang == 'fa' else 'Bulk Actions' }}</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <button class="btn btn-success btn-sm" onclick="bulkAction('start')">
+      <i class="fas fa-play"></i> {{ 'شروع همه' if lang == 'fa' else 'Start All' }}
+    </button>
+    <button class="btn btn-warning btn-sm" onclick="bulkAction('restart')">
+      <i class="fas fa-redo"></i> {{ 'راه‌اندازی مجدد همه' if lang == 'fa' else 'Restart All' }}
+    </button>
+    <button class="btn btn-danger btn-sm" onclick="bulkAction('stop')">
+      <i class="fas fa-stop"></i> {{ 'توقف همه' if lang == 'fa' else 'Stop All' }}
+    </button>
+  </div>
+</div>
+
+{% else %}
+<div class="card fade-in" style="text-align:center;padding:60px 0">
+  <i class="fas fa-server" style="font-size:3rem;opacity:.2;display:block;margin-bottom:16px"></i>
+  <h3 style="color:var(--text-muted);margin-bottom:8px">{{ 'هنوز سرویسی وجود ندارد' if lang == 'fa' else 'No Services Yet' }}</h3>
+  <p style="color:var(--text-disabled);font-size:.85rem;margin-bottom:24px">
+    {{ 'یک سرور یا کلاینت اضافه کنید تا شروع کنید' if lang == 'fa' else 'Add a server or client to get started' }}
+  </p>
+  <div style="display:flex;gap:12px;justify-content:center">
+    <a href="/add-server" class="btn btn-primary">
+      <i class="fas fa-plus"></i> {{ 'افزودن سرور' if lang == 'fa' else 'Add Server' }}
+    </a>
+    <a href="/add-client" class="btn btn-secondary">
+      <i class="fas fa-plug"></i> {{ 'افزودن کلاینت' if lang == 'fa' else 'Add Client' }}
+    </a>
+  </div>
+</div>
+{% endif %}
+
+<script>
+const svcNames = [{% for s in services %}'{{ s.name }}'{% if not loop.last %},{% endif %}{% endfor %}];
+
+async function bulkAction(action) {
+  const label = action.charAt(0).toUpperCase() + action.slice(1);
+  confirm2(
+    label + ' All',
+    `Are you sure you want to ${action} all ${svcNames.length} services?`,
+    async () => {
+      for (const n of svcNames) await apiCall(`/api/service/${n}/${action}`);
+      showToast(`All services ${action}ed`);
+      setTimeout(() => location.reload(), 1000);
+    }
+  );
+}
+</script>
+{% endblock %}

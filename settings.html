@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Settings — Erisrtg Panel{% endblock %}
+{% block page_title %}{{ 'تنظیمات' if session.get('lang') == 'fa' else 'Settings' }}{% endblock %}
+
+{% block content %}
+{% set lang = session.get('lang', 'en') %}
+<div style="max-width:720px" class="fade-in">
+
+  <!-- Security -->
+  <div class="card mb-6" style="margin-bottom:20px">
+    <div class="card-title" style="margin-bottom:20px"><i class="fas fa-shield-alt"></i> {{ 'امنیت' if lang == 'fa' else 'Security' }}</div>
+
+    <form method="POST" action="/settings">
+      <input type="hidden" name="action" value="change_username">
+      <div class="form-group">
+        <label class="form-label">{{ 'نام کاربری جدید' if lang == 'fa' else 'New Username' }}</label>
+        <input type="text" name="new_username" class="form-control" value="{{ cfg.username }}" minlength="3" required>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">
+        <i class="fas fa-user-edit"></i> {{ 'تغییر نام کاربری' if lang == 'fa' else 'Change Username' }}
+      </button>
+    </form>
+
+    <div class="divider"></div>
+
+    <form method="POST" action="/settings">
+      <input type="hidden" name="action" value="change_password">
+      <div class="form-group">
+        <label class="form-label">{{ 'رمز عبور فعلی' if lang == 'fa' else 'Current Password' }}</label>
+        <input type="password" name="current_password" class="form-control" required>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">{{ 'رمز عبور جدید' if lang == 'fa' else 'New Password' }}</label>
+          <input type="password" name="new_password" class="form-control" minlength="6" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ 'تکرار رمز عبور' if lang == 'fa' else 'Confirm Password' }}</label>
+          <input type="password" name="confirm_password" class="form-control" required>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">
+        <i class="fas fa-key"></i> {{ 'تغییر رمز عبور' if lang == 'fa' else 'Change Password' }}
+      </button>
+    </form>
+  </div>
+
+  <!-- Appearance -->
+  <div class="card mb-6" style="margin-bottom:20px">
+    <div class="card-title" style="margin-bottom:20px"><i class="fas fa-palette"></i> {{ 'ظاهر' if lang == 'fa' else 'Appearance' }}</div>
+
+    <form method="POST" action="/settings">
+      <input type="hidden" name="action" value="change_theme">
+      <div class="form-group">
+        <label class="form-label">{{ 'تم' if lang == 'fa' else 'Theme' }}</label>
+        <div style="display:flex;gap:12px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:12px 20px;border:1px solid var(--border);border-radius:8px;flex:1;transition:all .2s;background:{{ 'var(--accent-glow2)' if cfg.theme == 'dark' else '' }};border-color:{{ 'var(--accent)' if cfg.theme == 'dark' else 'var(--border)' }}">
+            <input type="radio" name="theme" value="dark" {{ 'checked' if cfg.theme == 'dark' }} style="accent-color:var(--accent)">
+            <i class="fas fa-moon"></i>
+            <span>{{ 'تیره' if lang == 'fa' else 'Dark' }}</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:12px 20px;border:1px solid var(--border);border-radius:8px;flex:1;transition:all .2s;background:{{ 'var(--accent-glow2)' if cfg.theme == 'light' else '' }};border-color:{{ 'var(--accent)' if cfg.theme == 'light' else 'var(--border)' }}">
+            <input type="radio" name="theme" value="light" {{ 'checked' if cfg.theme == 'light' }} style="accent-color:var(--accent)">
+            <i class="fas fa-sun"></i>
+            <span>{{ 'روشن' if lang == 'fa' else 'Light' }}</span>
+          </label>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">
+        <i class="fas fa-save"></i> {{ 'ذخیره تم' if lang == 'fa' else 'Save Theme' }}
+      </button>
+    </form>
+  </div>
+
+  <!-- Language -->
+  <div class="card mb-6" style="margin-bottom:20px">
+    <div class="card-title" style="margin-bottom:20px"><i class="fas fa-language"></i> {{ 'زبان' if lang == 'fa' else 'Language' }}</div>
+
+    <form method="POST" action="/settings">
+      <input type="hidden" name="action" value="change_language">
+      <div style="display:flex;gap:12px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:12px 20px;border:1px solid var(--border);border-radius:8px;flex:1;transition:all .2s;background:{{ 'var(--accent-glow2)' if cfg.language == 'en' else '' }};border-color:{{ 'var(--accent)' if cfg.language == 'en' else 'var(--border)' }}">
+          <input type="radio" name="language" value="en" {{ 'checked' if cfg.language == 'en' }} style="accent-color:var(--accent)">
+          🇬🇧 <span>English</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:12px 20px;border:1px solid var(--border);border-radius:8px;flex:1;transition:all .2s;background:{{ 'var(--accent-glow2)' if cfg.language == 'fa' else '' }};border-color:{{ 'var(--accent)' if cfg.language == 'fa' else 'var(--border)' }}">
+          <input type="radio" name="language" value="fa" {{ 'checked' if cfg.language == 'fa' }} style="accent-color:var(--accent)">
+          🇮🇷 <span>فارسی</span>
+        </label>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm mt-4" style="margin-top:14px">
+        <i class="fas fa-save"></i> {{ 'ذخیره زبان' if lang == 'fa' else 'Save Language' }}
+      </button>
+    </form>
+  </div>
+
+  <!-- Optimize -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:20px"><i class="fas fa-rocket"></i> {{ 'بهینه‌سازی سیستم' if lang == 'fa' else 'System Optimization' }}</div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:var(--bg-elevated);border-radius:10px;border:1px solid var(--border)">
+        <div>
+          <div style="font-weight:600;font-size:.9rem">sysctl Network Tuning</div>
+          <div style="font-size:.78rem;color:var(--text-muted);margin-top:3px">{{ 'بهینه‌سازی بافرهای شبکه' if lang == 'fa' else 'Optimize network buffers & TCP settings' }}</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="runOptimize('sysctl',this)">
+          <i class="fas fa-play"></i> {{ 'اجرا' if lang == 'fa' else 'Run' }}
+        </button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:var(--bg-elevated);border-radius:10px;border:1px solid var(--border)">
+        <div>
+          <div style="font-weight:600;font-size:.9rem">BBR Congestion Control</div>
+          <div style="font-size:.78rem;color:var(--text-muted);margin-top:3px">{{ 'فعال‌سازی BBR برای بهبود throughput' if lang == 'fa' else 'Enable BBR for improved throughput' }}</div>
+        </div>
+        <button class="btn btn-warning btn-sm" onclick="runOptimize('bbr',this)">
+          <i class="fas fa-play"></i> {{ 'اجرا' if lang == 'fa' else 'Run' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function runOptimize(action, btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  const r = await apiCall('/api/optimize/' + action);
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-play"></i> {{ "اجرا" if lang == "fa" else "Run" }}';
+  showToast(r.ok ? 'Done!' : (r.error || 'Error'), r.ok);
+}
+</script>
+{% endblock %}
