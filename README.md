@@ -218,8 +218,8 @@ If this project helped you, consider donating:
 
 | Network | Address |
 |---|---|
-| **Tron (TRC20)** | `TFYnorJt5gvejLwR8XQdjep1krS9Zw8pz3` |
-| **BEP20** | `0x06B904248da14E20D3d33eb6Ab7Be282AA9e6fBe` |
+| **Tron (TRC20)** | `TQrfzgZbBDDJSFWd7E1YBoeHXH58MUWVqE` |
+| **BEP20** | `0xef225De05Ea167e6a93e92D4298F987e524645f8` |
 
 ---
 
@@ -231,5 +231,5 @@ If this project helped you, consider donating:
 ---
 
 <div align="center">
-Made with ❤️ by <a href="https://t.me/erisrttg">@erisrttg</a>
+Made by <a href="https://t.me/erisrttg">@erisrttg</a>
 </div>
