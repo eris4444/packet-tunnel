@@ -115,27 +115,67 @@ def get_service_logs(svc_name, lines=50):
     out, _, _ = run_cmd(f"journalctl -u {svc_name} -n {lines} --no-pager 2>/dev/null")
     return out
 
+def _is_valid_ip(s):
+    """فقط یه IPv4 خالص قبول میکنه — HTML یا هر چیز دیگه‌ای رد میشه."""
+    import re as _re
+    s = s.strip()
+    return bool(_re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', s)) and \
+           all(0 <= int(o) <= 255 for o in s.split('.'))
+
+def get_public_ip():
+    """
+    سرویس‌های IP-echo رو یکی‌یکی امتحان می‌کنه.
+    اگر جواب HTML بود یا IP معتبر نبود، رد می‌کنه.
+    آخرین fallback: IP محلی از hostname.
+    """
+    # سرویس‌هایی که روی ایران کار می‌کنن اول میان
+    services = [
+        "ip.sb",
+        "api.ipify.org",
+        "ipinfo.io/ip",
+        "2ip.ru",
+        "checkip.amazonaws.com",
+        "ifconfig.me",
+        "icanhazip.com",
+        "ident.me",
+        "ipecho.net/plain",
+        "myexternalip.com/raw",
+    ]
+    for svc in services:
+        out, _, rc = run_cmd(
+            f"curl -4 -sS --max-time 4 --connect-timeout 3 "
+            f"--user-agent 'curl/7.68' "
+            f"'https://{svc}' 2>/dev/null || "
+            f"curl -4 -sS --max-time 4 --connect-timeout 3 "
+            f"'http://{svc}' 2>/dev/null"
+        )
+        candidate = out.strip().split('\n')[0].strip()
+        if _is_valid_ip(candidate):
+            return candidate
+    # fallback: آدرس محلی رابط پیش‌فرض
+    local, _, _ = run_cmd("ip route get 1.1.1.1 2>/dev/null | awk '{print $7}' | head -1")
+    if _is_valid_ip(local.strip()):
+        return local.strip()
+    local2, _, _ = run_cmd("hostname -I | awk '{print $1}'")
+    return local2.strip() or 'N/A'
+
 def get_system_stats():
     cpu, _, _    = run_cmd("top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1 | cut -d',' -f1")
     mem, _, _    = run_cmd("free -m | awk 'NR==2{printf \"%s/%s\", $3, $2}'")
     uptime, _, _ = run_cmd("uptime -p 2>/dev/null || uptime")
     disk, _, _   = run_cmd("df -h / | awk 'NR==2{print $5}'")
     load, _, _   = run_cmd("cat /proc/loadavg | awk '{print $1, $2, $3}'")
-    ip, _, _     = run_cmd(
-        "curl -4 -s --max-time 3 ifconfig.me 2>/dev/null || "
-        "curl -4 -s --max-time 3 icanhazip.com 2>/dev/null || "
-        "hostname -I | awk '{print $1}'"
-    )
     kernel, _, _ = run_cmd("uname -r")
     os_name, _, _= run_cmd("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"'")
     pv, _, _     = run_cmd(f"{BIN_PATH} version 2>/dev/null | head -1")
+    public_ip    = get_public_ip()
     return {
         'cpu': (cpu.strip() or '0').split()[0],
         'mem': mem.strip() or '0/0',
         'uptime': uptime.strip(),
         'disk': disk.strip() or '0%',
         'load': load.strip(),
-        'public_ip': ip.strip() or 'N/A',
+        'public_ip': public_ip,
         'kernel': kernel.strip(),
         'os': os_name.strip(),
         'paqet_version': pv.strip() or 'Not installed',
