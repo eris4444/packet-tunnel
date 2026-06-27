@@ -31,13 +31,12 @@
 
 set -o pipefail
 
-# ── Fix stdin when launched via  curl ... | bash  ────────────────
-# When piped, stdin is the pipe (curl output), not the terminal.
-# All interactive read() calls would get EOF immediately and loop.
-# Redirect stdin back to the controlling terminal before anything else.
-if [ ! -t 0 ]; then
-    exec </dev/tty
-fi
+# ── Always bind stdin to the real terminal ───────────────────────
+# Covers two cases:
+#   1) Launched via  curl ... | bash  (stdin = pipe, not tty)
+#   2) Some Termux terminal emulators where read -p misbehaves
+# Non-fatal: if /dev/tty is unavailable the script still continues.
+exec </dev/tty 2>/dev/null || true
 
 # ---------------- Colors ----------------
 readonly RED='\033[0;31m'
@@ -91,7 +90,7 @@ print_success() { echo -e "${GREEN}[OK]${NC} $1"; }
 print_error()   { echo -e "${RED}[X]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[!]${NC} $1"; }
 print_info()    { echo -e "${CYAN}[i]${NC} $1"; }
-pause() { local m="${1:-Press Enter to continue...}"; echo ""; read -r -p "$m" </dev/tty; }
+pause() { local m="${1:-Press Enter to continue...}"; echo ""; printf "%s" "$m"; read -r </dev/tty; }
 
 show_banner() {
     clear
@@ -304,12 +303,12 @@ iptables_try() {
 # ---------------- Manual KCP (shortened) ----------------
 get_manual_kcp_settings() {
     local nodelay interval resend nocongestion rcvwnd sndwnd
-    read -r -p "  nodelay [0-2, default 1]: " nodelay; nodelay="${nodelay:-1}"
-    read -r -p "  interval ms [default 20]: " interval; interval="${interval:-20}"
-    read -r -p "  resend [default 1]: " resend; resend="${resend:-1}"
-    read -r -p "  nocongestion 0/1 [default 1]: " nocongestion; nocongestion="${nocongestion:-1}"
-    read -r -p "  rcvwnd [default 1024]: " rcvwnd; rcvwnd="${rcvwnd:-1024}"
-    read -r -p "  sndwnd [default 1024]: " sndwnd; sndwnd="${sndwnd:-1024}"
+    printf "%s" "  nodelay [0-2, default 1]: "; read -r nodelay </dev/tty; nodelay="${nodelay:-1}"
+    printf "%s" "  interval ms [default 20]: "; read -r interval </dev/tty; interval="${interval:-20}"
+    printf "%s" "  resend [default 1]: "; read -r resend </dev/tty; resend="${resend:-1}"
+    printf "%s" "  nocongestion 0/1 [default 1]: "; read -r nocongestion </dev/tty; nocongestion="${nocongestion:-1}"
+    printf "%s" "  rcvwnd [default 1024]: "; read -r rcvwnd </dev/tty; rcvwnd="${rcvwnd:-1024}"
+    printf "%s" "  sndwnd [default 1024]: "; read -r sndwnd </dev/tty; sndwnd="${sndwnd:-1024}"
     echo "mode: \"manual\""
     echo "nodelay: $nodelay"
     echo "interval: $interval"
@@ -340,21 +339,21 @@ configure_client() {
         fi
         echo ""
 
-        read -r -p "Service name (e.g. myclient): " config_name
+        printf "%s" "Service name (e.g. myclient): "; read -r config_name </dev/tty
         config_name=$(clean_config_name "${config_name:-client}")
         if [ -f "$CONFIG_DIR/${config_name}.yaml" ]; then
-            read -r -p "Config '$config_name' exists. Overwrite? (y/N): " ow
+            printf "%s" "Config '$config_name' exists. Overwrite? (y/N): "; read -r ow </dev/tty
             [[ "$ow" =~ ^[Yy]$ ]] || continue
         fi
 
-        read -r -p "Kharej server IP: " server_ip
+        printf "%s" "Kharej server IP: "; read -r server_ip </dev/tty
         validate_ip "$server_ip" || { print_error "Invalid IP"; sleep 1.5; continue; }
 
-        read -r -p "Server port [default $DEFAULT_SERVER_PORT]: " server_port
+        printf "%s" "Server port [default $DEFAULT_SERVER_PORT]: "; read -r server_port </dev/tty
         server_port="${server_port:-$DEFAULT_SERVER_PORT}"
         validate_port "$server_port" || { print_error "Invalid port"; sleep 1.5; continue; }
 
-        read -r -p "Secret key (from server): " secret_key
+        printf "%s" "Secret key (from server): "; read -r secret_key </dev/tty
         [ -z "$secret_key" ] && { print_error "Secret key required"; sleep 1.5; continue; }
 
         echo -e "\n${CYAN}KCP mode${NC}"
@@ -362,7 +361,7 @@ configure_client() {
             IFS=':' read -r nm dsc <<< "${KCP_MODES[$k]}"
             echo " [$k] $nm - $dsc"
         done
-        read -r -p "Choose [0-4] (default 1): " mode_choice
+        printf "%s" "Choose [0-4] (default 1): "; read -r mode_choice </dev/tty
         mode_choice="${mode_choice:-1}"
         local mode_name="" kcp_fragment=""
         case $mode_choice in
@@ -374,11 +373,11 @@ configure_client() {
             *) mode_name="fast" ;;
         esac
 
-        read -r -p "Connections [1-32, default $DEFAULT_CONNECTIONS]: " conn
+        printf "%s" "Connections [1-32, default $DEFAULT_CONNECTIONS]: "; read -r conn </dev/tty
         conn="${conn:-$DEFAULT_CONNECTIONS}"
         [[ "$conn" =~ ^[0-9]+$ ]] && [ "$conn" -ge 1 ] && [ "$conn" -le 32 ] || conn="$DEFAULT_CONNECTIONS"
 
-        read -r -p "MTU [default $DEFAULT_MTU]: " mtu
+        printf "%s" "MTU [default $DEFAULT_MTU]: "; read -r mtu </dev/tty
         mtu="${mtu:-$DEFAULT_MTU}"
         [[ "$mtu" =~ ^[0-9]+$ ]] || mtu="$DEFAULT_MTU"
 
@@ -387,7 +386,7 @@ configure_client() {
             IFS=':' read -r nm dsc <<< "${ENCRYPTION_OPTIONS[$k]}"
             echo " [$k] $nm - $dsc"
         done
-        read -r -p "Choose [1-6] (default 1): " enc_choice
+        printf "%s" "Choose [1-6] (default 1): "; read -r enc_choice </dev/tty
         enc_choice="${enc_choice:-1}"
         local block; IFS=':' read -r block _ <<< "${ENCRYPTION_OPTIONS[$enc_choice]}"
         block="${block:-$DEFAULT_ENCRYPTION}"
@@ -395,17 +394,17 @@ configure_client() {
         echo -e "\n${CYAN}Traffic type${NC}"
         echo " [1] Port forwarding"
         echo " [2] SOCKS5 proxy"
-        read -r -p "Choose [1-2] (default 1): " traffic_type
+        printf "%s" "Choose [1-2] (default 1): "; read -r traffic_type </dev/tty
         traffic_type="${traffic_type:-1}"
 
         local forward_entries=() socks5_entries=() display=""
         if [ "$traffic_type" = "1" ]; then
-            read -r -p "Forward ports, comma separated (e.g. 443,8443): " fports
+            printf "%s" "Forward ports, comma separated (e.g. 443,8443): "; read -r fports </dev/tty
             fports=$(clean_port_list "$fports")
             [ -z "$fports" ] && { print_error "No valid ports"; sleep 1.5; continue; }
             IFS=',' read -ra PORTS <<< "$fports"
             for p in "${PORTS[@]}"; do
-                read -r -p "Port $p protocol [1=tcp 2=udp 3=both] (default 1): " pc
+                printf "%s" "Port $p protocol [1=tcp 2=udp 3=both] (default 1): "; read -r pc </dev/tty
                 pc="${pc:-1}"
                 case $pc in
                     2) forward_entries+=("  - listen: \"0.0.0.0:$p\"\n    target: \"127.0.0.1:$p\"\n    protocol: \"udp\"")
@@ -418,7 +417,7 @@ configure_client() {
                 esac
             done
         else
-            read -r -p "SOCKS5 port [default $DEFAULT_SOCKS5_PORT]: " sport
+            printf "%s" "SOCKS5 port [default $DEFAULT_SOCKS5_PORT]: "; read -r sport </dev/tty
             sport="${sport:-$DEFAULT_SOCKS5_PORT}"
             validate_port "$sport" || { print_error "Invalid port"; sleep 1.5; continue; }
 
@@ -426,7 +425,7 @@ configure_client() {
             echo ""
             echo " [1] 0.0.0.0:$sport  - reachable from ALL devices on local network (hotspot/LAN)"
             echo " [2] 127.0.0.1:$sport - only this phone"
-            read -r -p "Listen address [1-2] (default 1): " socks_bind_choice
+            printf "%s" "Listen address [1-2] (default 1): "; read -r socks_bind_choice </dev/tty
             local socks_bind
             [ "${socks_bind_choice:-1}" = "2" ] && socks_bind="127.0.0.1" || socks_bind="0.0.0.0"
             print_info "SOCKS5 will listen on ${socks_bind}:${sport}"
@@ -436,9 +435,9 @@ configure_client() {
             fi
 
             iptables_try "$sport" "tcp"
-            read -r -p "SOCKS5 username (blank = no auth): " su_
+            printf "%s" "SOCKS5 username (blank = no auth): "; read -r su_ </dev/tty
             if [ -n "$su_" ]; then
-                read -r -p "SOCKS5 password: " sp_
+                printf "%s" "SOCKS5 password: "; read -r sp_ </dev/tty
                 socks5_entries+=("  - listen: \"${socks_bind}:$sport\"\n    username: \"$su_\"\n    password: \"$sp_\"")
             else
                 socks5_entries+=("  - listen: \"${socks_bind}:$sport\"")
@@ -561,11 +560,11 @@ manage_services() {
         echo " 7. Delete tunnel"
         echo " 0. Back"
         echo ""
-        read -r -p "Choice: " c
+        printf "%s" "Choice: "; read -r c </dev/tty
         [ "$c" = "0" ] && return
 
         if [ "$c" = "1" ] || [ "$c" = "2" ] || [ "$c" = "3" ] || [ "$c" = "4" ] || [ "$c" = "5" ] || [ "$c" = "6" ] || [ "$c" = "7" ]; then
-            read -r -p "Service name (without 'paqet-' prefix): " n
+            printf "%s" "Service name (without 'paqet-' prefix): "; read -r n </dev/tty
             local svc="paqet-$n"
             local svc_dir="$SERVICE_BASE/$svc"
             local cfg="$CONFIG_DIR/$n.yaml"
@@ -578,9 +577,9 @@ manage_services() {
                 4) tail -n 40 "$LOG_DIR/$n/current" 2>/dev/null || print_warning "No log yet" ;;
                 5) [ -f "$cfg" ] && cat "$cfg" || print_error "Config missing" ;;
                 6) command -v nano >/dev/null 2>&1 && nano "$cfg" || vi "$cfg"
-                   read -r -p "Restart tunnel to apply changes? (y/N): " r
+                   printf "%s" "Restart tunnel to apply changes? (y/N): "; read -r r </dev/tty
                    [[ "$r" =~ ^[Yy]$ ]] && sv restart "$svc" ;;
-                7) read -r -p "Delete $svc and its config? (y/N): " r
+                7) printf "%s" "Delete $svc and its config? (y/N): "; read -r r </dev/tty
                    if [[ "$r" =~ ^[Yy]$ ]]; then
                        sv down "$svc" >/dev/null 2>&1 || true
                        rm -f "$PREFIX/var/service/$svc" 2>/dev/null || true
@@ -599,7 +598,7 @@ manage_services() {
 test_connection() {
     clear; show_banner
     echo -e "${GREEN}Diagnostics${NC}\n"
-    read -r -p "Kharej server IP to test: " ip
+    printf "%s" "Kharej server IP to test: "; read -r ip </dev/tty
     validate_ip "$ip" || { print_error "Invalid IP"; pause; return; }
 
     print_step "ICMP ping..."
@@ -669,7 +668,7 @@ main_menu() {
         echo " 6. Background/battery setup help"
         echo " 0. Exit"
         echo ""
-        read -r -p "Choice: " choice
+        printf "%s" "Choice: "; read -r choice </dev/tty
         case "$choice" in
             1) install_dependencies ;;
             2) build_paqet ;;
