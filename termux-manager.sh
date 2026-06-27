@@ -31,6 +31,14 @@
 
 set -o pipefail
 
+# ── Fix stdin when launched via  curl ... | bash  ────────────────
+# When piped, stdin is the pipe (curl output), not the terminal.
+# All interactive read() calls would get EOF immediately and loop.
+# Redirect stdin back to the controlling terminal before anything else.
+if [ ! -t 0 ]; then
+    exec </dev/tty
+fi
+
 # ---------------- Colors ----------------
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
@@ -413,13 +421,27 @@ configure_client() {
             read -r -p "SOCKS5 port [default $DEFAULT_SOCKS5_PORT]: " sport
             sport="${sport:-$DEFAULT_SOCKS5_PORT}"
             validate_port "$sport" || { print_error "Invalid port"; sleep 1.5; continue; }
+
+            # LAN vs local-only
+            echo ""
+            echo " [1] 0.0.0.0:$sport  - reachable from ALL devices on local network (hotspot/LAN)"
+            echo " [2] 127.0.0.1:$sport - only this phone"
+            read -r -p "Listen address [1-2] (default 1): " socks_bind_choice
+            local socks_bind
+            [ "${socks_bind_choice:-1}" = "2" ] && socks_bind="127.0.0.1" || socks_bind="0.0.0.0"
+            print_info "SOCKS5 will listen on ${socks_bind}:${sport}"
+            if [ "$socks_bind" = "0.0.0.0" ]; then
+                print_warning "Listening on 0.0.0.0 exposes the proxy to your whole network."
+                print_warning "Consider setting a username/password to prevent unauthorized use."
+            fi
+
             iptables_try "$sport" "tcp"
             read -r -p "SOCKS5 username (blank = no auth): " su_
             if [ -n "$su_" ]; then
                 read -r -p "SOCKS5 password: " sp_
-                socks5_entries+=("  - listen: \"127.0.0.1:$sport\"\n    username: \"$su_\"\n    password: \"$sp_\"")
+                socks5_entries+=("  - listen: \"${socks_bind}:$sport\"\n    username: \"$su_\"\n    password: \"$sp_\"")
             else
-                socks5_entries+=("  - listen: \"127.0.0.1:$sport\"")
+                socks5_entries+=("  - listen: \"${socks_bind}:$sport\"")
             fi
         fi
 
