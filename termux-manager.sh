@@ -208,37 +208,91 @@ LOCAL_IP=""
 GATEWAY_IP=""
 GATEWAY_MAC=""
 
+# hex little-endian (Android /proc/net/route) → dotted decimal
+_hex_to_ip() {
+    local h="$1"
+    printf '%d.%d.%d.%d'         "0x${h:6:2}" "0x${h:4:2}" "0x${h:2:2}" "0x${h:0:2}" 2>/dev/null || echo ""
+}
+
 get_network_info() {
     NETWORK_INTERFACE=""
     LOCAL_IP=""
     GATEWAY_IP=""
     GATEWAY_MAC=""
 
-    if command -v ip >/dev/null 2>&1; then
-        NETWORK_INTERFACE=$(ip route 2>/dev/null | grep default | awk '{print $5}' | head -1)
-        LOCAL_IP=$(ip -4 addr show "$NETWORK_INTERFACE" 2>/dev/null | grep -oE 'inet [0-9.]+' | awk '{print $2}' | head -1)
-        GATEWAY_IP=$(ip route 2>/dev/null | grep default | awk '{print $3}' | head -1)
-
-        if [ -n "$GATEWAY_IP" ]; then
-            ping -c 1 -W 1 "$GATEWAY_IP" >/dev/null 2>&1 || true
-            GATEWAY_MAC=$(ip neigh show "$GATEWAY_IP" 2>/dev/null | grep -oE '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -1)
+    # ── 1. Interface + gateway from /proc/net/route (most reliable on Android) ──
+    if [ -r /proc/net/route ]; then
+        local best_line
+        best_line=$(awk 'NR>1 && $2=="00000000" && $8>0 {print}' /proc/net/route 2>/dev/null | head -1)
+        if [ -z "$best_line" ]; then
+            # some kernels have flags in different position; just grab Destination=00000000
+            best_line=$(grep -v "^Iface" /proc/net/route 2>/dev/null | awk '$2=="00000000"' | head -1)
+        fi
+        if [ -n "$best_line" ]; then
+            NETWORK_INTERFACE=$(echo "$best_line" | awk '{print $1}')
+            local gw_hex; gw_hex=$(echo "$best_line" | awk '{print $3}')
+            GATEWAY_IP=$(_hex_to_ip "$gw_hex")
         fi
     fi
+
+    # ── 2. Fallback: scan /sys/class/net for active WiFi interfaces ──
+    if [ -z "$NETWORK_INTERFACE" ] || [ "$NETWORK_INTERFACE" = "unknown" ]; then
+        for iface in wlan0 wlan1 wlan2 eth0 eth1; do
+            if [ -d "/sys/class/net/$iface" ]; then
+                local operstate; operstate=$(cat "/sys/class/net/$iface/operstate" 2>/dev/null)
+                if [ "$operstate" = "up" ] || [ "$operstate" = "unknown" ]; then
+                    NETWORK_INTERFACE="$iface"
+                    break
+                fi
+            fi
+        done
+    fi
+
+    # ── 3. Local IP: try ip addr first, then /proc/net/fib_trie, then ifconfig ──
+    if [ -n "$NETWORK_INTERFACE" ] && [ "$NETWORK_INTERFACE" != "unknown" ]; then
+        LOCAL_IP=$(ip -4 addr show dev "$NETWORK_INTERFACE" 2>/dev/null             | grep -oE 'inet [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'             | awk '{print $2}' | head -1)
+
+        if [ -z "$LOCAL_IP" ]; then
+            LOCAL_IP=$(ip addr show "$NETWORK_INTERFACE" 2>/dev/null                 | grep 'inet ' | awk '{print $2}' | cut -d/ -f1 | head -1)
+        fi
+
+        if [ -z "$LOCAL_IP" ] && command -v ifconfig >/dev/null 2>&1; then
+            LOCAL_IP=$(ifconfig "$NETWORK_INTERFACE" 2>/dev/null                 | grep -oE 'addr:[0-9.]+' | cut -d: -f2 | head -1)
+            [ -z "$LOCAL_IP" ] && LOCAL_IP=$(ifconfig "$NETWORK_INTERFACE" 2>/dev/null                 | grep -oE 'inet [0-9.]+' | awk '{print $2}' | head -1)
+        fi
+    fi
+
+    # ── 4. Gateway IP fallback via ip route ──
+    if [ -z "$GATEWAY_IP" ] && command -v ip >/dev/null 2>&1; then
+        GATEWAY_IP=$(ip route 2>/dev/null | awk '/^default/ {print $3}' | head -1)
+    fi
+
+    # ── 5. Gateway MAC: /proc/net/arp first (no extra tools needed) ──
+    if [ -n "$GATEWAY_IP" ]; then
+        ping -c 2 -W 1 "$GATEWAY_IP" >/dev/null 2>&1 || true
+        # /proc/net/arp columns: IP HW_type Flags MAC Mask Device
+        GATEWAY_MAC=$(awk -v gw="$GATEWAY_IP" '$1==gw && $4!="00:00:00:00:00:00" {print $4}'             /proc/net/arp 2>/dev/null | head -1)
+
+        if [ -z "$GATEWAY_MAC" ] && command -v ip >/dev/null 2>&1; then
+            GATEWAY_MAC=$(ip neigh show "$GATEWAY_IP" 2>/dev/null                 | grep -oE '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -1)
+        fi
+    fi
+
     NETWORK_INTERFACE="${NETWORK_INTERFACE:-unknown}"
 }
 
 warn_if_cellular() {
     case "$NETWORK_INTERFACE" in
         wlan*|eth*)
-            ;; # looks like a normal L2 link, fine
+            print_success "Interface '$NETWORK_INTERFACE' looks like Wi-Fi/Ethernet — good."
+            ;;
         rmnet*|ccmni*|ccinet*|pdp*|usb*)
-            print_warning "Interface '$NETWORK_INTERFACE' looks like a CELLULAR data link."
-            print_warning "Raw-socket Ethernet framing usually needs a real gateway MAC, which"
-            print_warning "cellular interfaces normally don't have. This will very likely NOT work"
-            print_warning "over mobile data. Connect to Wi-Fi and re-run this wizard."
+            print_warning "Interface '$NETWORK_INTERFACE' is a CELLULAR data link."
+            print_warning "Raw-socket framing needs a gateway MAC — cellular links usually don't have one."
+            print_warning "Connect to Wi-Fi and re-run."
             ;;
         *)
-            print_warning "Unrecognized interface type '$NETWORK_INTERFACE'. If this is mobile data, expect failures."
+            print_info "Interface '$NETWORK_INTERFACE' — type unrecognized (probably fine on Wi-Fi)."
             ;;
     esac
 }
@@ -326,16 +380,67 @@ configure_client() {
 
         get_network_info
         local pub_ip; pub_ip=$(get_public_ip)
+
         echo -e "${YELLOW}Detected network${NC}"
-        printf " Interface : %s\n" "${NETWORK_INTERFACE:-not found}"
-        printf " Local IP  : %s\n" "${LOCAL_IP:-not found}"
-        printf " Public IP : %s\n" "$pub_ip"
+        printf " Interface  : %s\n" "${NETWORK_INTERFACE:-not found}"
+        printf " Local IP   : %s\n" "${LOCAL_IP:-not found}"
+        printf " Gateway IP : %s\n" "${GATEWAY_IP:-not found}"
         printf " Gateway MAC: %s\n" "${GATEWAY_MAC:-NOT FOUND}"
+        printf " Public IP  : %s\n" "$pub_ip"
         echo ""
         warn_if_cellular
-        if [ -z "$GATEWAY_MAC" ]; then
-            print_error "No gateway MAC detected. Raw-socket framing will almost certainly fail."
-            print_error "Make sure you're on Wi-Fi and that the router responds to ARP, then retry."
+
+        # ── Manual override when auto-detection fails ──────────────────
+        local net_ok=1
+        [ -z "$NETWORK_INTERFACE" ] || [ "$NETWORK_INTERFACE" = "unknown" ] && net_ok=0
+        [ -z "$LOCAL_IP" ]   && net_ok=0
+        [ -z "$GATEWAY_MAC" ] && net_ok=0
+
+        if [ "$net_ok" = "0" ]; then
+            print_warning "Auto-detection incomplete. You can enter the values manually."
+            print_info "To find them yourself, open another Termux session and run:"
+            print_info "  ip route          (look for 'default via X.X.X.X dev IFACE')"
+            print_info "  ip addr           (look for your Wi-Fi IP under the interface)"
+            print_info "  cat /proc/net/arp (look for your gateway IP row, column 4 = MAC)"
+            echo ""
+
+            if [ -z "$NETWORK_INTERFACE" ] || [ "$NETWORK_INTERFACE" = "unknown" ]; then
+                printf "%s" "Network interface name [e.g. wlan0]: "; read -r _iface </dev/tty
+                [ -n "$_iface" ] && NETWORK_INTERFACE="$_iface"
+            fi
+
+            if [ -z "$LOCAL_IP" ]; then
+                printf "%s" "Your local/Wi-Fi IP [e.g. 192.168.1.5]: "; read -r _lip </dev/tty
+                validate_ip "$_lip" && LOCAL_IP="$_lip"
+            fi
+
+            if [ -z "$GATEWAY_IP" ]; then
+                printf "%s" "Gateway/router IP  [e.g. 192.168.1.1]: "; read -r _gip </dev/tty
+                validate_ip "$_gip" && GATEWAY_IP="$_gip"
+                if [ -n "$GATEWAY_IP" ]; then
+                    print_info "Refreshing ARP for $GATEWAY_IP ..."
+                    ping -c 2 -W 1 "$GATEWAY_IP" >/dev/null 2>&1 || true
+                    GATEWAY_MAC=$(awk -v gw="$GATEWAY_IP" '$1==gw && $4!="00:00:00:00:00:00" {print $4}' /proc/net/arp 2>/dev/null | head -1)
+                fi
+            fi
+
+            if [ -z "$GATEWAY_MAC" ]; then
+                printf "%s" "Gateway MAC address [e.g. aa:bb:cc:dd:ee:ff]: "; read -r _mac </dev/tty
+                [ -n "$_mac" ] && GATEWAY_MAC="$_mac"
+            fi
+
+            # Final check
+            echo ""
+            printf " Interface  : %s\n" "$NETWORK_INTERFACE"
+            printf " Local IP   : %s\n" "$LOCAL_IP"
+            printf " Gateway MAC: %s\n" "${GATEWAY_MAC:-STILL MISSING}"
+            echo ""
+
+            if [ -z "$GATEWAY_MAC" ]; then
+                print_error "Gateway MAC is still missing — the tunnel will NOT work without it."
+                printf "%s" "Continue anyway? (y/N): "; read -r _cont </dev/tty
+                [[ "$_cont" =~ ^[Yy]$ ]] || continue
+            fi
         fi
         echo ""
 
