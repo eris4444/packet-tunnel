@@ -22,7 +22,7 @@ CONFIG_DIR   = '/etc/paqet'
 SERVICE_DIR  = '/etc/systemd/system'
 BIN_PATH     = '/usr/local/bin/paqet'
 PANEL_CONFIG = '/etc/paqet-panel/config.json'
-PANEL_VERSION = '7.1'
+PANEL_VERSION = '2.0.0'
 PANEL_PORT   = int(os.environ.get('PANEL_PORT', '7777'))
 
 os.makedirs('/etc/paqet-panel', exist_ok=True)

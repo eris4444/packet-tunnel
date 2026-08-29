@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/Version-7.0-2080ff?style=for-the-badge&logo=linux" alt="Version">
+<img src="https://img.shields.io/badge/Version-2.0.0-2080ff?style=for-the-badge&logo=linux" alt="Version">
 <img src="https://img.shields.io/badge/Port-7777-00c97a?style=for-the-badge" alt="Port">
 <img src="https://img.shields.io/badge/Python-3.8+-yellow?style=for-the-badge&logo=python" alt="Python">
 <img src="https://img.shields.io/badge/License-MIT-blueviolet?style=for-the-badge" alt="License">
