@@ -1,0 +1,8 @@
+# Force LF everywhere — bash refuses to run CRLF scripts
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.py   text eol=lf
+*.html text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
