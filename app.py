@@ -371,6 +371,22 @@ def add_client():
     run_cmd(f"systemctl enable {svc_name} --now")
     return redirect(url_for('service_detail', cfg_name=cfg_name))
 
+@app.route('/prefs', methods=['POST'])
+def prefs():
+    """Public UI preferences (theme / language) — usable from the login page."""
+    cfg = load_panel_config()
+    theme = request.form.get('theme')
+    lang = request.form.get('language')
+    if theme in ('dark', 'light'):
+        cfg['theme'] = theme
+        session['theme'] = theme
+    if lang in ('en', 'fa'):
+        cfg['language'] = lang
+        session['lang'] = lang
+    save_panel_config(cfg)
+    return {'ok': True}
+
+
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():

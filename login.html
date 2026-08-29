@@ -7,115 +7,245 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Login — Erisrtg Panel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Vazirmatn:wght@400;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=Vazirmatn:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
 :root,[data-theme="dark"]{
-  --bg:#080d1a;--surface:#0d1628;--card:#111d35;
-  --border:#1e3060;--accent:#1a66cc;--accent-b:#2080ff;
-  --accent-g:rgba(32,128,255,.25);--accent-g2:rgba(26,102,204,.12);
-  --text:#e8f0ff;--muted:#8aaccc;--disabled:#4a6080;
-  --red:#ff4466;--red-bg:rgba(255,68,102,.1);
-  --font:'Inter','Vazirmatn',sans-serif;--mono:'JetBrains Mono',monospace;
+  --bg:#05070f;
+  --card:rgba(17,26,47,.66);
+  --inset:rgba(3,7,18,.6);
+  --elev:rgba(22,33,58,.78);
+  --border:rgba(125,175,255,.14);
+  --border-strong:rgba(125,175,255,.28);
+  --accent:#2f7dfb;--accent-b:#57a4ff;
+  --grad:linear-gradient(135deg,#2f7dfb 0%,#38bdf8 55%,#22d3ee 100%);
+  --accent-g:rgba(64,150,255,.35);--accent-g2:rgba(64,150,255,.10);
+  --text:#e9f1ff;--muted:#9db4d4;--disabled:#3b506c;
+  --red:#ff5d7d;--red-bg:rgba(255,93,125,.11);
+  --green:#22e39a;
+  --shadow:0 30px 90px rgba(0,4,24,.65);
+  --inner-hi:inset 0 1px 0 rgba(255,255,255,.06);
+  --font:'Inter','Vazirmatn',system-ui,sans-serif;
+  --display:'Space Grotesk','Vazirmatn','Inter',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --ease:cubic-bezier(.22,1,.36,1);
 }
 [data-theme="light"]{
-  --bg:#eef2f8;--surface:#f5f8ff;--card:#fff;
-  --border:#c8d8f0;--accent:#1a55cc;--accent-b:#1666ee;
-  --accent-g:rgba(26,85,204,.15);--accent-g2:rgba(26,85,204,.07);
-  --text:#0a1628;--muted:#2a4a7a;--disabled:#aabbd0;
-  --red:#cc2244;--red-bg:rgba(204,34,68,.08);
+  --bg:#eef3fb;
+  --card:rgba(255,255,255,.82);
+  --inset:rgba(232,239,250,.85);
+  --elev:#fff;
+  --border:rgba(30,70,140,.14);
+  --border-strong:rgba(30,70,140,.26);
+  --accent:#1f5fe0;--accent-b:#1657d6;
+  --grad:linear-gradient(135deg,#1f5fe0 0%,#2b8ae6 55%,#12b5d4 100%);
+  --accent-g:rgba(31,95,224,.22);--accent-g2:rgba(31,95,224,.08);
+  --text:#0a1730;--muted:#3a5578;--disabled:#a3b5cd;
+  --red:#d92c50;--red-bg:rgba(217,44,80,.09);
+  --green:#06a86c;
+  --shadow:0 26px 70px rgba(20,45,100,.18);
+  --inner-hi:inset 0 1px 0 rgba(255,255,255,.85);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--font);background:var(--bg);color:var(--text);
-  min-height:100vh;display:flex;align-items:center;justify-content:center;
-  position:relative;overflow:hidden}
-/* grid bg */
+html{font-size:15px}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--text);
+  min-height:100vh;min-height:100dvh;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;-webkit-font-smoothing:antialiased;
+  letter-spacing:-.005em;
+}
+/* aurora */
 body::before{
-  content:'';position:fixed;inset:0;
+  content:'';position:fixed;inset:-25%;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(36% 40% at 18% 12%,rgba(47,125,251,.32),transparent 65%),
+    radial-gradient(32% 36% at 84% 10%,rgba(34,211,238,.22),transparent 65%),
+    radial-gradient(44% 44% at 76% 90%,rgba(169,123,255,.20),transparent 65%),
+    radial-gradient(40% 40% at 20% 86%,rgba(47,125,251,.16),transparent 65%);
+  filter:blur(24px);
+  animation:aurora 24s ease-in-out infinite alternate;
+}
+@keyframes aurora{
+  0%{transform:translate3d(0,0,0) scale(1)}
+  50%{transform:translate3d(2%,-3%,0) scale(1.1)}
+  100%{transform:translate3d(-2%,2%,0) scale(1.05)}
+}
+/* grid */
+body::after{
+  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
   background-image:
     linear-gradient(var(--border) 1px,transparent 1px),
     linear-gradient(90deg,var(--border) 1px,transparent 1px);
-  background-size:50px 50px;opacity:.3;pointer-events:none;
+  background-size:54px 54px;
+  -webkit-mask-image:radial-gradient(ellipse 62% 62% at 50% 50%,#000,transparent 78%);
+  mask-image:radial-gradient(ellipse 62% 62% at 50% 50%,#000,transparent 78%);
+  opacity:.55;
 }
-body::after{
-  content:'';position:fixed;inset:0;
-  background:radial-gradient(ellipse 80% 60% at 50% 50%,
-    rgba(26,102,204,.18) 0%,transparent 70%);
-  pointer-events:none;
-}
-.login-wrap{
-  position:relative;z-index:1;
-  width:100%;max-width:420px;padding:24px;
-}
+.login-wrap{position:relative;z-index:2;width:100%;max-width:436px;padding:24px}
 .card{
-  background:var(--card);border:1px solid var(--border);
-  border-radius:20px;padding:40px 36px;
-  box-shadow:0 20px 80px rgba(0,0,40,.5);
+  position:relative;
+  background:var(--card);
+  backdrop-filter:saturate(160%) blur(22px);
+  -webkit-backdrop-filter:saturate(160%) blur(22px);
+  border:1px solid var(--border);
+  border-radius:26px;padding:42px 38px;
+  box-shadow:var(--shadow),var(--inner-hi);
+  animation:rise .7s var(--ease) both;
 }
-.logo{text-align:center;margin-bottom:32px}
+@keyframes rise{from{opacity:0;transform:translateY(22px) scale(.97)}to{opacity:1;transform:none}}
+.card::before{
+  content:'';position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(155deg,rgba(255,255,255,.3),transparent 45%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;
+}
+.logo{text-align:center;margin-bottom:34px}
 .logo-icon{
-  width:64px;height:64px;margin:0 auto 14px;
-  background:linear-gradient(135deg,var(--accent),#4da0ff);
-  border-radius:18px;display:flex;align-items:center;justify-content:center;
-  font-size:28px;color:#fff;
-  box-shadow:0 0 40px var(--accent-g);
+  position:relative;
+  width:68px;height:68px;margin:0 auto 16px;
+  background:var(--grad);
+  border-radius:20px;display:flex;align-items:center;justify-content:center;
+  font-size:27px;color:#fff;
+  box-shadow:0 14px 40px var(--accent-g),var(--inner-hi);
 }
-.logo h1{font-size:1.4rem;font-weight:700;letter-spacing:.5px}
-.logo p{font-size:.8rem;color:var(--muted);margin-top:4px;font-family:var(--mono)}
+.logo-icon::after{
+  content:'';position:absolute;inset:-8px;border-radius:26px;
+  background:var(--grad);opacity:.35;filter:blur(16px);z-index:-1;
+  animation:breathe 4s ease-in-out infinite;
+}
+@keyframes breathe{0%,100%{opacity:.3;transform:scale(1)}50%{opacity:.55;transform:scale(1.1)}}
+.logo h1{
+  font-family:var(--display);font-size:1.5rem;font-weight:700;letter-spacing:-.02em;
+  background:linear-gradient(100deg,var(--text),var(--accent-b));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.logo p{
+  font-size:.72rem;color:var(--muted);margin-top:6px;font-family:var(--mono);
+  letter-spacing:.1em;text-transform:uppercase;
+}
 .form-group{margin-bottom:18px}
-.form-label{display:block;font-size:.82rem;font-weight:600;color:var(--muted);margin-bottom:7px}
+.form-label{display:block;font-size:.79rem;font-weight:600;color:var(--muted);margin-bottom:8px;letter-spacing:.01em}
 .input-wrap{position:relative}
 .input-wrap i{
-  position:absolute;top:50%;left:14px;transform:translateY(-50%);
-  color:var(--disabled);font-size:.9rem;
+  position:absolute;top:50%;left:15px;transform:translateY(-50%);
+  color:var(--disabled);font-size:.88rem;transition:color .25s;pointer-events:none;
 }
-[dir="rtl"] .input-wrap i{left:auto;right:14px}
+[dir="rtl"] .input-wrap i{left:auto;right:15px}
 .form-control{
-  width:100%;padding:11px 14px 11px 42px;
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:10px;color:var(--text);font-size:.88rem;
-  font-family:var(--font);transition:border-color .2s,box-shadow .2s;outline:none;
+  width:100%;padding:13px 15px 13px 44px;
+  background:var(--inset);border:1px solid var(--border);
+  border-radius:12px;color:var(--text);font-size:.88rem;
+  font-family:var(--font);outline:none;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.14);
+  transition:border-color .2s,box-shadow .25s,background .25s;
 }
-[dir="rtl"] .form-control{padding:11px 42px 11px 14px}
-.form-control:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-g2)}
+[dir="rtl"] .form-control{padding:13px 44px 13px 15px}
+.form-control:hover{border-color:var(--border-strong)}
+.form-control:focus{
+  border-color:var(--accent);background:var(--elev);
+  box-shadow:0 0 0 3px var(--accent-g2),0 0 26px var(--accent-g2);
+}
+.input-wrap:focus-within i{color:var(--accent-b)}
 .form-control::placeholder{color:var(--disabled)}
+.toggle-pw{
+  position:absolute;top:50%;right:12px;transform:translateY(-50%);
+  background:none;border:none;color:var(--disabled);cursor:pointer;
+  padding:6px;border-radius:8px;font-size:.85rem;transition:color .2s;
+}
+[dir="rtl"] .toggle-pw{right:auto;left:12px}
+.toggle-pw:hover{color:var(--accent-b)}
 .btn-submit{
-  width:100%;padding:13px;border-radius:10px;border:none;
-  background:linear-gradient(135deg,var(--accent),var(--accent-b));
-  color:#fff;font-size:.93rem;font-weight:700;cursor:pointer;
-  transition:opacity .2s,box-shadow .2s;letter-spacing:.3px;
+  position:relative;overflow:hidden;
+  width:100%;padding:14px;border-radius:12px;border:none;margin-top:6px;
+  background:var(--grad);color:#fff;
+  font-family:var(--font);font-size:.92rem;font-weight:700;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  letter-spacing:.01em;
+  box-shadow:0 8px 26px var(--accent-g2),var(--inner-hi);
+  transition:transform .2s var(--ease),box-shadow .3s,opacity .2s;
 }
-.btn-submit:hover{opacity:.92;box-shadow:0 8px 32px var(--accent-g)}
+.btn-submit::after{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.32) 50%,transparent 70%);
+  transform:translateX(-120%);transition:transform .75s var(--ease);
+}
+.btn-submit:hover{transform:translateY(-2px);box-shadow:0 14px 38px var(--accent-g),var(--inner-hi)}
+.btn-submit:hover::after{transform:translateX(120%)}
+.btn-submit:active{transform:translateY(0)}
 .error-box{
-  background:var(--red-bg);border:1px solid rgba(255,68,102,.25);
-  border-radius:8px;padding:10px 14px;
+  position:relative;overflow:hidden;
+  background:var(--red-bg);border:1px solid rgba(255,93,125,.28);
+  border-radius:12px;padding:12px 16px;
   font-size:.83rem;color:var(--red);
-  display:flex;align-items:center;gap:8px;margin-bottom:18px;
+  display:flex;align-items:center;gap:10px;margin-bottom:18px;
+  animation:shake .5s var(--ease) both;
 }
-.footer-note{text-align:center;margin-top:20px;font-size:.75rem;color:var(--disabled)}
-.footer-note a{color:var(--accent-b);text-decoration:none}
-.lang-toggle{
-  position:absolute;top:20px;right:20px;z-index:10;
-  background:var(--card);border:1px solid var(--border);
-  border-radius:8px;padding:6px 12px;font-size:.75rem;font-weight:700;
+.error-box::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:currentColor}
+[dir="rtl"] .error-box::before{left:auto;right:0}
+@keyframes shake{
+  0%,100%{transform:translateX(0)}
+  20%{transform:translateX(-6px)}40%{transform:translateX(5px)}
+  60%{transform:translateX(-3px)}80%{transform:translateX(2px)}
+}
+.meta-row{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  margin-top:22px;font-size:.72rem;color:var(--disabled);
+  font-family:var(--mono);letter-spacing:.03em;
+}
+.meta-row .dot{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);
+  animation:pulse-dot 1.9s ease-in-out infinite}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.8)}}
+.footer-note{text-align:center;margin-top:26px;font-size:.74rem;color:var(--disabled)}
+.footer-note a{color:var(--accent-b);text-decoration:none;font-weight:600;transition:opacity .2s}
+.footer-note a:hover{opacity:.75}
+.top-actions{
+  position:fixed;top:20px;right:20px;z-index:5;display:flex;gap:9px;
+}
+[dir="rtl"] .top-actions{right:auto;left:20px}
+.chip-btn{
+  min-width:38px;height:38px;padding:0 12px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--card);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--border);border-radius:11px;
+  font-family:var(--font);font-size:.74rem;font-weight:700;
   color:var(--muted);cursor:pointer;
+  transition:all .25s var(--ease);
 }
-[dir="rtl"] .lang-toggle{right:auto;left:20px}
+.chip-btn:hover{color:var(--accent-b);border-color:var(--border-strong);transform:translateY(-2px)}
+@media(max-width:480px){
+  .card{padding:32px 24px;border-radius:20px}
+  .login-wrap{padding:16px}
+  .logo h1{font-size:1.32rem}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+::selection{background:var(--accent-g);color:var(--text)}
+:focus-visible{outline:2px solid var(--accent-b);outline-offset:2px;border-radius:8px}
 </style>
 </head>
 <body>
 {% set lang = cfg.get('language', 'en') %}
 
-<button class="lang-toggle" onclick="toggleLang()">
-  {{ 'FA' if lang == 'en' else 'EN' }}
-</button>
+<div class="top-actions">
+  <button class="chip-btn" onclick="toggleTheme()" title="Theme" id="themeBtn">
+    <i class="fas fa-moon" id="themeIcon"></i>
+  </button>
+  <button class="chip-btn" onclick="toggleLang()" title="Language">
+    {{ 'FA' if lang == 'en' else 'EN' }}
+  </button>
+</div>
 
 <div class="login-wrap">
   <div class="card">
     <div class="logo">
       <div class="logo-icon"><i class="fas fa-network-wired"></i></div>
       <h1>Erisrtg Panel</h1>
-      <p>Packet Tunnel Management</p>
+      <p>Packet Tunnel</p>
     </div>
 
     {% with messages = get_flashed_messages() %}
@@ -129,42 +259,75 @@ body::after{
 
     <form method="POST" action="/login">
       <div class="form-group">
-        <label class="form-label">{{ 'نام کاربری' if lang == 'fa' else 'Username' }}</label>
+        <label class="form-label" for="username">{{ 'نام کاربری' if lang == 'fa' else 'Username' }}</label>
         <div class="input-wrap">
           <i class="fas fa-user"></i>
-          <input type="text" name="username" class="form-control"
+          <input type="text" id="username" name="username" class="form-control"
             placeholder="{{ 'نام کاربری' if lang == 'fa' else 'Enter username' }}"
             autocomplete="username" required autofocus>
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">{{ 'رمز عبور' if lang == 'fa' else 'Password' }}</label>
+        <label class="form-label" for="password">{{ 'رمز عبور' if lang == 'fa' else 'Password' }}</label>
         <div class="input-wrap">
           <i class="fas fa-lock"></i>
-          <input type="password" name="password" class="form-control"
+          <input type="password" id="password" name="password" class="form-control"
             placeholder="{{ 'رمز عبور' if lang == 'fa' else 'Enter password' }}"
             autocomplete="current-password" required>
+          <button type="button" class="toggle-pw" onclick="togglePw(this)"
+            aria-label="{{ 'نمایش رمز' if lang == 'fa' else 'Show password' }}">
+            <i class="fas fa-eye"></i>
+          </button>
         </div>
       </div>
       <button type="submit" class="btn-submit">
-        <i class="fas fa-sign-in-alt"></i>
+        <i class="fas fa-arrow-right-to-bracket"></i>
         {{ 'ورود به پنل' if lang == 'fa' else 'Sign In' }}
       </button>
     </form>
 
+    <div class="meta-row">
+      <span class="dot"></span>
+      {{ 'سیستم آماده است' if lang == 'fa' else 'System online' }}
+    </div>
+
     <div class="footer-note">
-      Erisrtg Packet Tunnel &bull; <a href="https://t.me/erisrttg" target="_blank">@erisrttg</a>
+      Erisrtg Packet Tunnel &bull; <a href="https://t.me/erisrttg" target="_blank" rel="noopener">@erisrttg</a>
     </div>
   </div>
 </div>
 
 <script>
-function toggleLang() {
-  const cur = '{{ lang }}';
-  fetch('/settings', {
+const LANG = '{{ lang }}';
+
+function togglePw(btn) {
+  const inp = document.getElementById('password');
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.querySelector('i').className = show ? 'fas fa-eye-slash' : 'fas fa-eye';
+}
+
+function setThemeIcon(t) {
+  document.getElementById('themeIcon').className = t === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+}
+setThemeIcon(document.documentElement.getAttribute('data-theme'));
+
+function toggleTheme() {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  setThemeIcon(next);
+  fetch('/prefs', {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: `action=change_language&language=${cur === 'en' ? 'fa' : 'en'}`
+    body: `theme=${next}`
+  });
+}
+
+function toggleLang() {
+  fetch('/prefs', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: `language=${LANG === 'en' ? 'fa' : 'en'}`
   }).then(() => location.reload());
 }
 </script>
