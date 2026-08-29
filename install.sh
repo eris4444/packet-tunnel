@@ -16,6 +16,7 @@ SERVICE_NAME="paqet-panel"
 PANEL_PORT="7777"
 PANEL_USER="admin"
 PANEL_PASS="$(tr -dc 'A-Za-z0-9!@#' </dev/urandom 2>/dev/null | head -c 16 || echo "Admin$(date +%s)")"
+PANEL_PASS_RANDOM=1   # flipped to 0 once the user picks their own password
 PAQET_BIN="/usr/local/bin/paqet"
 PAQET_REPO="hanselime/paqet"
 
@@ -392,22 +393,100 @@ setup_python() {
 }
 
 # ════════════════════════════════════════════════════════════════
+#  STEP 0 — Ask for panel credentials (interactive)
+# ════════════════════════════════════════════════════════════════
+ask_credentials() {
+    step_head "Step 0 — Panel Credentials"
+
+    # 1) Unattended override:
+    #    PANEL_USERNAME=admin PANEL_PASSWORD=secret bash install.sh
+    if [ -n "${PANEL_USERNAME:-}" ] || [ -n "${PANEL_PASSWORD:-}" ]; then
+        [ -n "${PANEL_USERNAME:-}" ] && PANEL_USER="$PANEL_USERNAME"
+        if [ -n "${PANEL_PASSWORD:-}" ]; then
+            if [ ${#PANEL_PASSWORD} -lt 6 ]; then
+                step_err "PANEL_PASSWORD must be at least 6 characters"; exit 1
+            fi
+            PANEL_PASS="$PANEL_PASSWORD"
+            PANEL_PASS_RANDOM=0
+        fi
+        step_ok "Credentials taken from environment (user: ${PANEL_USER})"
+        return
+    fi
+
+    # 2) Interactive prompt. Read from /dev/tty rather than stdin so this
+    #    also works with `bash <(curl ...)` and `curl ... | bash`.
+    if [ ! -r /dev/tty ]; then
+        step_warn "No terminal available — generating a random password"
+        step_info "For unattended installs use:"
+        step_info "  PANEL_USERNAME=admin PANEL_PASSWORD=yourpass bash install.sh"
+        return
+    fi
+
+    echo -e "  ${CYAN}Choose the username and password you will log in with.${NC}"
+    echo ""
+
+    local u p1 p2
+    while :; do
+        printf "  ${CYAN}Username${NC} [admin]: " > /dev/tty
+        IFS= read -r u < /dev/tty || u=""
+        u="$(echo "$u" | tr -d '[:space:]')"
+        [ -z "$u" ] && u="admin"
+        [ ${#u} -ge 3 ] && break
+        echo -e "  ${RED}[✗]${NC} Username must be at least 3 characters" > /dev/tty
+    done
+
+    while :; do
+        printf "  ${CYAN}Password${NC} (min 6 chars): " > /dev/tty
+        IFS= read -rs p1 < /dev/tty || p1=""
+        echo > /dev/tty
+        if [ ${#p1} -lt 6 ]; then
+            echo -e "  ${RED}[✗]${NC} Too short — use at least 6 characters" > /dev/tty
+            continue
+        fi
+        printf "  ${CYAN}Repeat password${NC}: " > /dev/tty
+        IFS= read -rs p2 < /dev/tty || p2=""
+        echo > /dev/tty
+        if [ "$p1" != "$p2" ]; then
+            echo -e "  ${RED}[✗]${NC} Passwords do not match — try again" > /dev/tty
+            continue
+        fi
+        break
+    done
+
+    PANEL_USER="$u"
+    PANEL_PASS="$p1"
+    PANEL_PASS_RANDOM=0
+    echo ""
+    step_ok "Credentials set (user: ${PANEL_USER})"
+}
+
+# ════════════════════════════════════════════════════════════════
 #  STEP 5 — Credentials
 # ════════════════════════════════════════════════════════════════
 set_credentials() {
     step_head "Step 5 — Panel Credentials"
     mkdir -p /etc/paqet-panel
-    local hash
-    hash=$(python3 -c "import hashlib; print(hashlib.sha256('${PANEL_PASS}'.encode()).hexdigest())" 2>/dev/null)
-    [ -z "$hash" ] && { step_err "Failed to hash password"; exit 1; }
-    cat > /etc/paqet-panel/config.json << EOF
-{
-  "username": "${PANEL_USER}",
-  "password_hash": "${hash}",
-  "theme": "dark",
-  "language": "en"
-}
-EOF
+
+    # Username and password go through the environment, never through the
+    # shell command line — quotes/$/backticks in a password stay literal.
+    if ! _PANEL_U="$PANEL_USER" _PANEL_P="$PANEL_PASS" python3 - <<'PYEOF'
+import hashlib, json, os
+
+user = os.environ["_PANEL_U"]
+pwd  = os.environ["_PANEL_P"]
+cfg = dict(
+    username=user,
+    password_hash=hashlib.sha256(pwd.encode()).hexdigest(),
+    theme="dark",
+    language="en",
+)
+with open("/etc/paqet-panel/config.json", "w") as f:
+    json.dump(cfg, f, indent=2)
+PYEOF
+    then
+        step_err "Failed to write /etc/paqet-panel/config.json"; exit 1
+    fi
+
     chmod 600 /etc/paqet-panel/config.json
     step_ok "Credentials saved to /etc/paqet-panel/config.json"
 }
@@ -521,7 +600,11 @@ print_result() {
     echo -e "  ┌──────────────────────────────────────────────────────────┐"
     printf  "  │  %-14s : %-40s│\n" "URL"      "http://${ip}:${PANEL_PORT}"
     printf  "  │  %-14s : %-40s│\n" "Username" "${PANEL_USER}"
-    printf  "  │  %-14s : %-40s│\n" "Password" "${PANEL_PASS}"
+    if [ "${PANEL_PASS_RANDOM:-1}" = "1" ]; then
+        printf  "  │  %-14s : %-40s│\n" "Password" "${PANEL_PASS}"
+    else
+        printf  "  │  %-14s : %-40s│\n" "Password" "(the one you chose)"
+    fi
     printf  "  │  %-14s : %-40s│\n" "Paqet"    "${paqet_ver}"
     echo -e "  └──────────────────────────────────────────────────────────┘"
     echo ""
@@ -531,7 +614,9 @@ print_result() {
     printf  "  %-10s %s\n" "Logs:"    "journalctl -u ${SERVICE_NAME} -f"
     printf  "  %-10s %s\n" "Paqet:"   "${PAQET_BIN} --help"
     echo ""
-    echo -e "${YELLOW}  ⚠️  Save your password — it won't be shown again!${NC}"
+    if [ "${PANEL_PASS_RANDOM:-1}" = "1" ]; then
+        echo -e "${YELLOW}  ⚠️  Save your password — it won't be shown again!${NC}"
+    fi
     echo ""
     echo -e "${MAGENTA}  Telegram: @erisrttg${NC}"
     echo ""
@@ -560,6 +645,7 @@ case "${1:-install}" in
     update-paqet)
         install_paqet ;;
     *)
+        ask_credentials
         install_deps
         install_paqet
         extract_panel
