@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+{% block title %}Nodes — Erisrtg Panel{% endblock %}
+{% block page_title %}{{ 'نودها' if session.get('lang') == 'fa' else 'Nodes' }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.node-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 16px; }
+
+.node-card {
+  position: relative; overflow: hidden;
+  background: var(--bg-card);
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow), var(--inner-hi);
+  transition: transform .35s var(--ease), border-color .3s, box-shadow .35s;
+}
+.node-card:hover { transform: translateY(-3px); border-color: var(--border-strong); box-shadow: var(--shadow-lg), var(--inner-hi); }
+.node-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--accent-grad-r); background-size: 200% 100%;
+  animation: shift-grad 6s linear infinite; opacity: .85;
+}
+.node-card.is-down::before { background: linear-gradient(90deg, var(--red), #ff9db0, var(--red)); }
+.node-card.is-loading::before { opacity: .35; }
+
+.node-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+.node-avatar {
+  width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-glow2); border: 1px solid var(--border-subtle);
+  color: var(--accent-bright); font-size: 1rem;
+}
+.node-card.is-down .node-avatar { background: var(--red-bg); border-color: rgba(255,93,125,.24); color: var(--red); }
+.node-id { min-width: 0; flex: 1; }
+.node-name {
+  font-family: var(--font-display); font-weight: 700; font-size: .96rem;
+  letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.node-url {
+  font-family: var(--font-mono); font-size: .7rem; color: var(--text-muted);
+  margin-top: 3px; direction: ltr;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+[dir="rtl"] .node-url { text-align: right; }
+
+.node-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.metric {
+  background: var(--bg-inset); border: 1px solid var(--border-subtle);
+  border-radius: 10px; padding: 10px 12px;
+}
+.metric-label { font-size: .64rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .1em; }
+[dir="rtl"] .metric-label { letter-spacing: 0; text-transform: none; font-size: .72rem; }
+.metric-value {
+  font-family: var(--font-display); font-weight: 700; font-size: 1.02rem;
+  margin-top: 3px; font-variant-numeric: tabular-nums; direction: ltr;
+}
+[dir="rtl"] .metric-value { text-align: right; }
+
+.node-foot {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding-top: 13px; border-top: 1px solid var(--border-subtle);
+}
+.node-err {
+  font-size: .78rem; color: var(--red);
+  display: flex; align-items: center; gap: 8px;
+  background: var(--red-bg); border: 1px solid rgba(255,93,125,.22);
+  border-radius: 10px; padding: 10px 12px; margin-bottom: 14px;
+}
+
+.token-box {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: 10px; padding: 11px 14px;
+}
+.token-text {
+  font-family: var(--font-mono); font-size: .78rem; color: var(--accent-bright);
+  flex: 1; min-width: 200px; word-break: break-all; direction: ltr; text-align: left;
+  user-select: all;
+}
+.token-hidden { color: var(--text-disabled); letter-spacing: .18em; }
+
+.empty-state { text-align: center; padding: 46px 20px; color: var(--text-muted); }
+.empty-state i { font-size: 2.6rem; opacity: .28; display: block; margin-bottom: 14px; }
+
+.skeleton { color: var(--text-disabled); }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set lang = session.get('lang', 'en') %}
+
+<!-- ── THIS PANEL'S OWN NODE TOKEN ─────────────────────────── -->
+<div class="card fade-in mb-6">
+  <div class="card-header">
+    <div class="card-title">
+      <i class="fas fa-key"></i>
+      {{ 'توکن این پنل' if lang == 'fa' else 'This Panel’s Token' }}
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="regenToken(this)">
+      <i class="fas fa-rotate"></i>
+      {{ 'توکن جدید' if lang == 'fa' else 'Regenerate' }}
+    </button>
+  </div>
+
+  <p class="form-hint" style="margin-top:0;margin-bottom:12px">
+    {% if lang == 'fa' %}
+      این توکن را در پنل دیگر وارد کنید تا این سرور را به‌عنوان نود اضافه کند.
+      توکن فقط اجازه‌ی <b>خواندن</b> آمار را می‌دهد — با آن نمی‌توان سرویسی را استارت، استاپ یا حذف کرد.
+    {% else %}
+      Paste this token into another panel to add this server as a node.
+      The token grants <b>read-only</b> access to stats — it cannot start, stop or delete anything.
+    {% endif %}
+  </p>
+
+  <div class="token-box">
+    <span class="token-text token-hidden" id="tokenText" data-token="{{ node_token }}">••••••••••••••••••••••••••••••••</span>
+    <button class="btn btn-secondary btn-xs" onclick="toggleToken(this)" id="tokenEye">
+      <i class="fas fa-eye"></i> <span>{{ 'نمایش' if lang == 'fa' else 'Show' }}</span>
+    </button>
+    <button class="btn btn-secondary btn-xs" onclick="copyToken()">
+      <i class="fas fa-copy"></i> {{ 'کپی' if lang == 'fa' else 'Copy' }}
+    </button>
+  </div>
+
+  <div class="alert alert-info mt-4" style="margin-bottom:0">
+    <i class="fas fa-shield-halved"></i>
+    <span>
+      {% if lang == 'fa' %}
+        اگر ممکن است، آدرس نود را روی <b>IP داخل تانل</b> بدهید نه IP عمومی — پنل روی HTTP ساده کار می‌کند.
+      {% else %}
+        Prefer the node’s <b>address inside the tunnel</b> over its public IP — the panel speaks plain HTTP.
+      {% endif %}
+    </span>
+  </div>
+</div>
+
+<!-- ── ADD A NODE ───────────────────────────────────────────── -->
+<div class="card fade-in mb-6">
+  <div class="card-header">
+    <div class="card-title">
+      <i class="fas fa-plus"></i>
+      {{ 'افزودن نود' if lang == 'fa' else 'Add a Node' }}
+    </div>
+  </div>
+
+  <div class="form-row-3">
+    <div class="form-group" style="margin-bottom:0">
+      <label class="form-label">{{ 'نام' if lang == 'fa' else 'Name' }} <span class="req">*</span></label>
+      <input type="text" id="nName" class="form-control"
+             placeholder="{{ 'مثلا: خارج آلمان' if lang == 'fa' else 'e.g. Kharej DE' }}">
+    </div>
+    <div class="form-group" style="margin-bottom:0">
+      <label class="form-label">{{ 'آدرس' if lang == 'fa' else 'Address' }} <span class="req">*</span></label>
+      <input type="text" id="nUrl" class="form-control" dir="ltr"
+             placeholder="http://10.0.0.2:{{ local_port }}">
+    </div>
+    <div class="form-group" style="margin-bottom:0">
+      <label class="form-label">{{ 'توکن' if lang == 'fa' else 'Token' }} <span class="req">*</span></label>
+      <input type="password" id="nToken" class="form-control" dir="ltr"
+             placeholder="{{ 'توکن آن پنل' if lang == 'fa' else 'that panel’s token' }}">
+    </div>
+  </div>
+
+  <div class="mt-4">
+    <button class="btn btn-primary" onclick="addNode(this)">
+      <i class="fas fa-link"></i>
+      {{ 'تست و افزودن' if lang == 'fa' else 'Test & Add' }}
+    </button>
+    <span class="form-hint" style="margin-inline-start:12px">
+      {{ 'قبل از ذخیره، اتصال تست می‌شود.' if lang == 'fa' else 'The connection is tested before saving.' }}
+    </span>
+  </div>
+</div>
+
+<!-- ── NODE LIST ────────────────────────────────────────────── -->
+<div class="card fade-in">
+  <div class="card-header">
+    <div class="card-title">
+      <i class="fas fa-sitemap"></i>
+      {{ 'نودهای متصل' if lang == 'fa' else 'Connected Nodes' }}
+      {% if nodes %}<span class="badge badge-blue">{{ nodes|length }}</span>{% endif %}
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="loadNodes()" id="refreshNodesBtn">
+      <i class="fas fa-sync-alt"></i> {{ 'بروزرسانی' if lang == 'fa' else 'Refresh' }}
+    </button>
+  </div>
+
+  {% if nodes %}
+  <div class="node-grid" id="nodeGrid">
+    {% for n in nodes %}
+    <div class="node-card is-loading" data-id="{{ n.id }}">
+      <div class="node-head">
+        <div class="node-avatar"><i class="fas fa-server"></i></div>
+        <div class="node-id">
+          <div class="node-name">{{ n.name }}</div>
+          <div class="node-url">{{ n.url }}</div>
+        </div>
+      </div>
+      <div class="skeleton" style="font-size:.82rem">
+        <span class="spinner"></span>
+        <span style="margin-inline-start:8px">{{ 'در حال اتصال…' if lang == 'fa' else 'Connecting…' }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state" id="nodeGrid">
+    <i class="fas fa-sitemap"></i>
+    {{ 'هنوز نودی اضافه نشده است.' if lang == 'fa' else 'No nodes added yet.' }}
+    <br>
+    <span style="font-size:.8rem;color:var(--text-disabled)">
+      {{ 'توکن پنل دیگر را از همان صفحه‌ی نودهایش بردارید.' if lang == 'fa' else 'Grab the other panel’s token from its own Nodes page.' }}
+    </span>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+const FA = LANG === 'fa';
+const T = {
+  cpu:      FA ? 'پردازنده' : 'CPU',
+  ram:      FA ? 'حافظه'    : 'RAM',
+  down:     FA ? 'دانلود'   : 'Down',
+  up:       FA ? 'آپلود'    : 'Up',
+  services: FA ? 'سرویس'    : 'Services',
+  uptime:   FA ? 'آپتایم'   : 'Uptime',
+  remove:   FA ? 'حذف'      : 'Remove',
+  open:     FA ? 'باز کردن' : 'Open',
+  offline:  FA ? 'در دسترس نیست' : 'Offline',
+};
+
+// fmtBytes / fmtRate come from base.html
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g,
+    c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function nodeCardHtml(n) {
+  const head = `
+    <div class="node-head">
+      <div class="node-avatar"><i class="fas fa-${n.ok ? 'server' : 'plug-circle-xmark'}"></i></div>
+      <div class="node-id">
+        <div class="node-name">${esc(n.name)}</div>
+        <div class="node-url">${esc(n.hostname || n.url)}</div>
+      </div>
+      <span class="status-pill ${n.ok ? 'pill-active' : 'pill-failed'}">
+        <span class="pill-dot"></span>${n.ok ? (n.latency_ms + ' ms') : T.offline}
+      </span>
+    </div>`;
+
+  const foot = `
+    <div class="node-foot">
+      <a href="${esc(n.url)}" target="_blank" rel="noopener" class="btn btn-secondary btn-xs">
+        <i class="fas fa-arrow-up-right-from-square"></i> ${T.open}
+      </a>
+      <button class="btn btn-danger btn-xs" style="margin-inline-start:auto"
+              onclick="removeNode('${esc(n.id)}','${esc(n.name)}')">
+        <i class="fas fa-trash"></i> ${T.remove}
+      </button>
+    </div>`;
+
+  if (!n.ok) {
+    return `<div class="node-card is-down" data-id="${esc(n.id)}">${head}
+      <div class="node-err"><i class="fas fa-triangle-exclamation"></i>${esc(n.error || 'Unreachable')}</div>
+      ${foot}</div>`;
+  }
+
+  const st = n.stats || {}, tr = n.traffic || {};
+  const mem = String(st.mem || '0/0').split('/');
+  const memPct = (mem.length === 2 && +mem[1] > 0)
+    ? Math.round(+mem[0] / +mem[1] * 100) + '%' : '—';
+
+  return `<div class="node-card" data-id="${esc(n.id)}">
+    ${head}
+    <div class="node-metrics">
+      <div class="metric"><div class="metric-label">${T.cpu}</div>
+        <div class="metric-value">${esc(st.cpu || '0')}%</div></div>
+      <div class="metric"><div class="metric-label">${T.ram}</div>
+        <div class="metric-value">${memPct}</div></div>
+      <div class="metric"><div class="metric-label">${T.down}</div>
+        <div class="metric-value">${fmtRate(tr.rx_rate)}</div></div>
+      <div class="metric"><div class="metric-label">${T.up}</div>
+        <div class="metric-value">${fmtRate(tr.tx_rate)}</div></div>
+    </div>
+    <div class="node-foot" style="border-top:none;padding-top:0;margin-bottom:12px">
+      <span class="badge badge-blue">${T.services}: ${n.services_active}/${n.services_total}</span>
+      <span class="badge badge-purple">${esc(st.uptime || '')}</span>
+    </div>
+    ${foot}
+  </div>`;
+}
+
+async function loadNodes() {
+  const grid = document.getElementById('nodeGrid');
+  if (!grid || !grid.classList.contains('node-grid')) return;
+  const icon = document.querySelector('#refreshNodesBtn i');
+  if (icon) icon.style.animation = 'spin .6s linear infinite';
+  try {
+    const r = await (await fetch('/api/nodes')).json();
+    if (r.ok) grid.innerHTML = r.nodes.map(nodeCardHtml).join('');
+  } catch (e) {}
+  if (icon) icon.style.animation = '';
+}
+
+async function addNode(btn) {
+  const name  = document.getElementById('nName').value.trim();
+  const url   = document.getElementById('nUrl').value.trim();
+  const token = document.getElementById('nToken').value.trim();
+  if (!name || !url || !token) {
+    showToast(FA ? 'همه‌ی فیلدها لازم است' : 'All fields are required', false);
+    return;
+  }
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const r = await apiCall('/api/nodes/add', 'POST', { name, url, token });
+    if (r.ok) {
+      showToast(FA ? 'نود اضافه شد' : 'Node added', true);
+      setTimeout(() => location.reload(), 700);
+      return;
+    }
+    showToast(r.error || 'Error', false);
+  } catch (e) {
+    showToast('Error', false);
+  }
+  btn.disabled = false;
+  btn.innerHTML = orig;
+}
+
+function removeNode(id, name) {
+  confirm2(
+    FA ? 'حذف نود' : 'Remove Node',
+    FA ? `نود "${name}" حذف شود؟` : `Remove node "${name}"?`,
+    async () => {
+      const r = await apiCall(`/api/nodes/${id}/delete`, 'POST');
+      showToast(r.ok ? (FA ? 'حذف شد' : 'Removed') : (r.error || 'Error'), r.ok);
+      if (r.ok) setTimeout(() => location.reload(), 600);
+    }
+  );
+}
+
+function toggleToken(btn) {
+  const el = document.getElementById('tokenText');
+  const hidden = el.classList.contains('token-hidden');
+  el.classList.toggle('token-hidden', !hidden);
+  el.textContent = hidden ? el.dataset.token : '••••••••••••••••••••••••••••••••';
+  btn.querySelector('i').className = hidden ? 'fas fa-eye-slash' : 'fas fa-eye';
+  btn.querySelector('span').textContent = hidden
+    ? (FA ? 'مخفی' : 'Hide') : (FA ? 'نمایش' : 'Show');
+}
+
+function copyToken() {
+  const t = document.getElementById('tokenText').dataset.token;
+  navigator.clipboard.writeText(t)
+    .then(() => showToast(FA ? 'کپی شد' : 'Copied', true))
+    .catch(() => showToast(FA ? 'کپی نشد' : 'Copy failed', false));
+}
+
+function regenToken(btn) {
+  confirm2(
+    FA ? 'توکن جدید' : 'Regenerate Token',
+    FA ? 'توکن فعلی باطل می‌شود و هر پنلی که این سرور را اضافه کرده قطع خواهد شد. ادامه؟'
+       : 'The current token is revoked — any panel that added this server will stop seeing it. Continue?',
+    async () => {
+      const r = await apiCall('/api/node/token/regenerate', 'POST');
+      if (r.ok) {
+        const el = document.getElementById('tokenText');
+        el.dataset.token = r.token;
+        if (!el.classList.contains('token-hidden')) el.textContent = r.token;
+        showToast(FA ? 'توکن جدید ساخته شد' : 'New token generated', true);
+      } else {
+        showToast('Error', false);
+      }
+    }
+  );
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadNodes();
+  setInterval(loadNodes, 20000);
+});
+</script>
+{% endblock %}

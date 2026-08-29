@@ -6,6 +6,8 @@ All files flat in one directory — no subdirectories.
 """
 
 import os, json, subprocess, re, secrets, hashlib, glob
+import hmac, time, socket, threading, uuid
+import urllib.request, urllib.error, urllib.parse
 from functools import wraps
 from flask import (Flask, render_template, request, jsonify,
                    session, redirect, url_for, flash)
@@ -20,6 +22,8 @@ CONFIG_DIR   = '/etc/paqet'
 SERVICE_DIR  = '/etc/systemd/system'
 BIN_PATH     = '/usr/local/bin/paqet'
 PANEL_CONFIG = '/etc/paqet-panel/config.json'
+PANEL_VERSION = '7.1'
+PANEL_PORT   = int(os.environ.get('PANEL_PORT', '7777'))
 
 os.makedirs('/etc/paqet-panel', exist_ok=True)
 os.makedirs(CONFIG_DIR, exist_ok=True)
@@ -30,21 +34,36 @@ def load_panel_config():
         'username': 'admin',
         'password_hash': hashlib.sha256('admin123'.encode()).hexdigest(),
         'theme': 'dark',
-        'language': 'en'
+        'language': 'en',
+        'node_token': ''
     }
     try:
         with open(PANEL_CONFIG) as f:
             data = json.load(f)
-            for k, v in default.items():
-                data.setdefault(k, v)
-            return data
+        changed = False
+        for k, v in default.items():
+            if k not in data:
+                data[k] = v
+                changed = True
+        # every panel is a potential node — make sure it has a token
+        if not data.get('node_token'):
+            data['node_token'] = secrets.token_hex(24)
+            changed = True
+        if changed:
+            save_panel_config(data)
+        return data
     except Exception:
+        default['node_token'] = secrets.token_hex(24)
         save_panel_config(default)
         return default
 
 def save_panel_config(cfg):
     with open(PANEL_CONFIG, 'w') as f:
         json.dump(cfg, f, indent=2)
+    try:
+        os.chmod(PANEL_CONFIG, 0o600)
+    except Exception:
+        pass
 
 # ── Auth ──────────────────────────────────────────────────────
 def login_required(f):
@@ -254,6 +273,7 @@ def logout():
 @login_required
 def dashboard():
     return render_template('dashboard.html', stats=get_system_stats(),
+                           traffic=get_traffic(), nodes=load_nodes(),
                            services=get_services(), cfg=load_panel_config(), active='dashboard')
 
 @app.route('/services')
@@ -483,7 +503,9 @@ def api_cron(svc_name, interval):
 @app.route('/api/stats')
 @login_required
 def api_stats():
-    return jsonify(get_system_stats())
+    data = get_system_stats()
+    data['traffic'] = get_traffic()
+    return jsonify(data)
 
 @app.route('/api/generate-key')
 @login_required
@@ -521,6 +543,251 @@ def api_optimize(action):
     else:
         return jsonify({'ok': False, 'error': 'Unknown action'})
     return jsonify({'ok': rc == 0})
+
+# ═══════════════════════════════════════════════════
+#  NODES — read-only fleet monitoring between panels
+#
+#  Every panel exposes ONE token-authenticated endpoint,
+#  /api/node/summary, that returns stats only. The token
+#  never reaches a control route: a leaked token cannot
+#  start, stop, delete or reconfigure anything.
+# ═══════════════════════════════════════════════════
+
+NODES_FILE    = '/etc/paqet-panel/nodes.json'
+TRAFFIC_STATE = '/etc/paqet-panel/traffic.json'
+
+SKIP_IFACE_PREFIX = ('lo', 'veth', 'docker', 'br-', 'virbr', 'dummy')
+
+
+def get_traffic():
+    """Cumulative rx/tx across real interfaces, plus rate since the last sample."""
+    total_rx = total_tx = 0
+    per_iface = {}
+    try:
+        with open('/proc/net/dev') as f:
+            for line in f.readlines()[2:]:
+                name, _, rest = line.partition(':')
+                name = name.strip()
+                if not name or name.startswith(SKIP_IFACE_PREFIX):
+                    continue
+                cols = rest.split()
+                if len(cols) < 9:
+                    continue
+                rx, tx = int(cols[0]), int(cols[8])
+                per_iface[name] = {'rx': rx, 'tx': tx}
+                total_rx += rx
+                total_tx += tx
+    except Exception:
+        pass
+
+    now = time.time()
+    rx_rate = tx_rate = 0.0
+    prev = None
+    try:
+        with open(TRAFFIC_STATE) as f:
+            prev = json.load(f)
+    except Exception:
+        prev = None
+
+    # Only trust a sample that is at least 2s old — several callers hit this
+    # (browser polling and remote hubs), and a sub-second delta is pure noise.
+    dt = (now - prev['t']) if prev else 0
+    if prev and 2 <= dt < 3600:
+        rx_rate = max(0.0, (total_rx - prev['rx']) / dt)
+        tx_rate = max(0.0, (total_tx - prev['tx']) / dt)
+
+    if not prev or dt >= 2:
+        try:
+            with open(TRAFFIC_STATE, 'w') as f:
+                json.dump({'t': now, 'rx': total_rx, 'tx': total_tx}, f)
+        except Exception:
+            pass
+
+    return {
+        'rx_bytes': total_rx, 'tx_bytes': total_tx,
+        'rx_rate': round(rx_rate, 1), 'tx_rate': round(tx_rate, 1),
+        'interfaces': per_iface,
+    }
+
+
+def require_node_token(f):
+    """Bearer-token auth for the read-only node endpoint."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = load_panel_config().get('node_token', '')
+        auth = request.headers.get('Authorization', '')
+        given = auth[7:].strip() if auth[:7].lower() == 'bearer ' else ''
+        if not token or not given or not hmac.compare_digest(given, token):
+            return jsonify({'ok': False, 'error': 'unauthorized'}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ── Node registry (this panel acting as the hub) ──────────────
+def load_nodes():
+    try:
+        with open(NODES_FILE) as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def save_nodes(nodes):
+    with open(NODES_FILE, 'w') as f:
+        json.dump(nodes, f, indent=2)
+    try:
+        os.chmod(NODES_FILE, 0o600)
+    except Exception:
+        pass
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """A node must answer directly; never follow it somewhere else."""
+    def redirect_request(self, *a, **kw):
+        return None
+
+
+def fetch_node(node, timeout=6):
+    """Ask one node for its summary. Never raises."""
+    url = node.get('url', '').rstrip('/') + '/api/node/summary'
+    req = urllib.request.Request(url, headers={
+        'Authorization': 'Bearer ' + node.get('token', ''),
+        'User-Agent': 'erisrtg-panel-hub',
+    })
+    started = time.time()
+    try:
+        opener = urllib.request.build_opener(_NoRedirect)
+        with opener.open(req, timeout=timeout) as r:
+            body = r.read(512 * 1024)
+        data = json.loads(body.decode('utf-8', 'replace'))
+        data['ok'] = True
+        data['latency_ms'] = int((time.time() - started) * 1000)
+        return data
+    except urllib.error.HTTPError as e:
+        msg = 'Bad token' if e.code == 401 else 'HTTP %s' % e.code
+        return {'ok': False, 'error': msg}
+    except urllib.error.URLError as e:
+        return {'ok': False, 'error': 'Unreachable (%s)' % (getattr(e, 'reason', e),)}
+    except Exception as e:
+        return {'ok': False, 'error': type(e).__name__}
+
+
+def poll_nodes(nodes, timeout=6):
+    """Fetch every node in parallel so one dead box cannot stall the page."""
+    results = [None] * len(nodes)
+
+    def work(i, n):
+        r = fetch_node(n, timeout=timeout)
+        r['id'] = n.get('id')
+        r['name'] = n.get('name')
+        r['url'] = n.get('url')
+        results[i] = r
+
+    threads = [threading.Thread(target=work, args=(i, n), daemon=True)
+               for i, n in enumerate(nodes)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout + 2)
+    return [r for r in results if r is not None]
+
+
+def _valid_node_url(url):
+    try:
+        p = urllib.parse.urlparse(url)
+    except Exception:
+        return False
+    return p.scheme in ('http', 'https') and bool(p.hostname)
+
+
+# ── Node endpoint (this panel acting as a node) ───────────────
+@app.route('/api/node/summary')
+@require_node_token
+def api_node_summary():
+    svcs = get_services()
+    return jsonify({
+        'hostname': socket.gethostname(),
+        'panel_version': PANEL_VERSION,
+        'stats': get_system_stats(),
+        'traffic': get_traffic(),
+        'services': [{
+            'cfg_name': s['cfg_name'], 'status': s['status'],
+            'role': s['role'], 'mode': s['mode'], 'port': s['port'],
+        } for s in svcs],
+        'services_total': len(svcs),
+        'services_active': sum(1 for s in svcs if s['status'] == 'active'),
+    })
+
+
+# ── Hub routes ────────────────────────────────────────────────
+@app.route('/nodes')
+@login_required
+def nodes_page():
+    cfg = load_panel_config()
+    return render_template('nodes.html',
+                           nodes=load_nodes(),
+                           node_token=cfg.get('node_token', ''),
+                           local_port=PANEL_PORT,
+                           cfg=cfg, active='nodes')
+
+
+@app.route('/api/nodes')
+@login_required
+def api_nodes_poll():
+    return jsonify({'ok': True, 'nodes': poll_nodes(load_nodes())})
+
+
+@app.route('/api/nodes/add', methods=['POST'])
+@login_required
+def api_nodes_add():
+    body = request.get_json(silent=True) or {}
+    name = (body.get('name') or '').strip()
+    url = (body.get('url') or '').strip().rstrip('/')
+    token = (body.get('token') or '').strip()
+
+    if not url.startswith(('http://', 'https://')):
+        url = 'http://' + url
+    if not name:
+        return jsonify({'ok': False, 'error': 'Name is required'})
+    if not _valid_node_url(url):
+        return jsonify({'ok': False, 'error': 'Invalid URL'})
+    if not token:
+        return jsonify({'ok': False, 'error': 'Token is required'})
+
+    nodes = load_nodes()
+    if any(n.get('url') == url for n in nodes):
+        return jsonify({'ok': False, 'error': 'This node is already added'})
+
+    probe = fetch_node({'url': url, 'token': token}, timeout=8)
+    if not probe.get('ok'):
+        return jsonify({'ok': False, 'error': probe.get('error', 'Node did not answer')})
+
+    nodes.append({'id': uuid.uuid4().hex[:12], 'name': name,
+                  'url': url, 'token': token})
+    save_nodes(nodes)
+    return jsonify({'ok': True, 'hostname': probe.get('hostname', '')})
+
+
+@app.route('/api/nodes/<node_id>/delete', methods=['POST'])
+@login_required
+def api_nodes_delete(node_id):
+    nodes = load_nodes()
+    kept = [n for n in nodes if n.get('id') != node_id]
+    if len(kept) == len(nodes):
+        return jsonify({'ok': False, 'error': 'Node not found'})
+    save_nodes(kept)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/node/token/regenerate', methods=['POST'])
+@login_required
+def api_node_token_regenerate():
+    cfg = load_panel_config()
+    cfg['node_token'] = secrets.token_hex(24)
+    save_panel_config(cfg)
+    return jsonify({'ok': True, 'token': cfg['node_token']})
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=7777, debug=False)

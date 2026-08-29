@@ -50,6 +50,20 @@
     <div class="stat-label">{{ 'آپتایم' if lang == 'fa' else 'Uptime' }}</div>
   </div>
 
+  <div class="stat-card fade-in-1">
+    <div class="stat-icon"><i class="fas fa-arrow-down"></i></div>
+    <div class="stat-value" id="stat-rx">-</div>
+    <div class="stat-label">{{ 'سرعت دانلود' if lang == 'fa' else 'Download' }}</div>
+    <div class="stat-sub" id="stat-rx-total">{{ traffic.rx_bytes if traffic else 0 }}</div>
+  </div>
+
+  <div class="stat-card fade-in-2">
+    <div class="stat-icon"><i class="fas fa-arrow-up"></i></div>
+    <div class="stat-value" id="stat-tx">-</div>
+    <div class="stat-label">{{ 'سرعت آپلود' if lang == 'fa' else 'Upload' }}</div>
+    <div class="stat-sub" id="stat-tx-total">{{ traffic.tx_bytes if traffic else 0 }}</div>
+  </div>
+
   <div class="stat-card fade-in-3">
     <div class="stat-icon"><i class="fas fa-tachometer-alt"></i></div>
     <div class="stat-value" id="stat-load" style="font-size:1rem;">{{ stats.load }}</div>
@@ -201,6 +215,15 @@
 </div>
 
 <script>
+// server hands us raw byte counters — render them in human units
+document.addEventListener('DOMContentLoaded', () => {
+  ['stat-rx-total','stat-tx-total'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = fmtBytes(parseInt(el.textContent, 10) || 0) + ' total';
+  });
+  refreshStats();
+});
+
 async function installPaqet(btn) {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>';

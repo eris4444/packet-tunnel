@@ -797,6 +797,29 @@ textarea.form-control { resize: vertical; font-family: var(--font-mono); font-si
 [dir="rtl"] #toast { right: auto !important; left: 24px; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(18px) scale(.96); } to { opacity: 1; transform: none; } }
 </style>
+<script>
+// Deliberately in <head>: page templates put their <script> inside the
+// content block, which the browser runs before the main script block at
+// the end of <body>.
+const LANG  = '{{ session.get("lang", "en") }}';
+const THEME = '{{ session.get("theme", "dark") }}';
+
+function fmtBytes(n) {
+  if (n === null || n === undefined || isNaN(n)) return '-';
+  const u = ['B','KB','MB','GB','TB','PB'];
+  let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return n.toFixed(n < 10 && i > 0 ? 1 : 0) + ' ' + u[i];
+}
+function fmtRate(n) { return fmtBytes(n) + '/s'; }
+
+async function apiCall(url, method='POST', data=null) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if (data) opts.body = JSON.stringify(data);
+  const r = await fetch(url, opts);
+  return r.json();
+}
+</script>
 {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -808,14 +831,14 @@ textarea.form-control { resize: vertical; font-family: var(--font-mono); font-si
     'add_client': 'Add Client', 'settings': 'Settings', 'logout': 'Logout',
     'overview': 'Overview', 'manage': 'Manage', 'configure': 'Configure',
     'system': 'SYSTEM', 'tunnel': 'TUNNEL', 'admin': 'Administrator',
-    'optimize': 'Optimize'
+    'optimize': 'Optimize', 'nodes': 'Nodes', 'fleet': 'FLEET'
   },
   'fa': {
     'dashboard': 'داشبورد', 'services': 'سرویس‌ها', 'add_server': 'افزودن سرور',
     'add_client': 'افزودن کلاینت', 'settings': 'تنظیمات', 'logout': 'خروج',
     'overview': 'نمای کلی', 'manage': 'مدیریت', 'configure': 'پیکربندی',
     'system': 'سیستم', 'tunnel': 'تانل', 'admin': 'مدیر',
-    'optimize': 'بهینه‌سازی'
+    'optimize': 'بهینه‌سازی', 'nodes': 'نودها', 'fleet': 'ناوگان'
   }
 } %}
 
@@ -841,6 +864,11 @@ textarea.form-control { resize: vertical; font-family: var(--font-mono); font-si
       {% if services is defined %}
       <span class="nav-badge">{{ services|length }}</span>
       {% endif %}
+    </a>
+
+    <div class="nav-section">{{ t[lang]['fleet'] }}</div>
+    <a href="/nodes" class="nav-item {% if active == 'nodes' %}active{% endif %}">
+      <i class="fas fa-sitemap"></i> {{ t[lang]['nodes'] }}
     </a>
 
     <div class="nav-section">{{ t[lang]['tunnel'] }}</div>
@@ -957,9 +985,6 @@ textarea.form-control { resize: vertical; font-family: var(--font-mono); font-si
 </div>
 
 <script>
-const LANG = '{{ lang }}';
-const THEME = '{{ session.get("theme", "dark") }}';
-
 // Theme
 function setTheme(t) {
   document.documentElement.setAttribute('data-theme', t);
@@ -1015,14 +1040,6 @@ document.getElementById('confirmOkBtn').onclick = function() {
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if(e.target===m) closeModal(m.id); }));
 
-// API call helper
-async function apiCall(url, method='POST', data=null) {
-  const opts = { method, headers: {'Content-Type':'application/json'} };
-  if (data) opts.body = JSON.stringify(data);
-  const r = await fetch(url, opts);
-  return r.json();
-}
-
 // Service action
 async function svcAction(svcName, action, label) {
   const btn = event.currentTarget;
@@ -1059,6 +1076,12 @@ async function refreshStats() {
       const el = document.getElementById('stat-'+k);
       if (el) el.textContent = s[k] || '-';
     });
+    if (s.traffic) {
+      const rx = document.getElementById('stat-rx');
+      const tx = document.getElementById('stat-tx');
+      if (rx) rx.textContent = fmtRate(s.traffic.rx_rate);
+      if (tx) tx.textContent = fmtRate(s.traffic.tx_rate);
+    }
   } catch(e) {}
   setTimeout(() => icon.style.animation = '', 600);
 }
