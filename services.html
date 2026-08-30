@@ -30,9 +30,10 @@
         <tr>
           <th>#</th>
           <th>{{ 'نام سرویس' if lang == 'fa' else 'Service Name' }}</th>
+          <th>{{ 'تانل' if lang == 'fa' else 'Tunnel' }}</th>
           <th>{{ 'وضعیت' if lang == 'fa' else 'Status' }}</th>
           <th>{{ 'نوع' if lang == 'fa' else 'Type' }}</th>
-          <th>{{ 'مد KCP' if lang == 'fa' else 'KCP Mode' }}</th>
+          <th>{{ 'مد' if lang == 'fa' else 'Mode' }}</th>
           <th>MTU</th>
           <th>{{ 'اتصالات' if lang == 'fa' else 'Conn' }}</th>
           <th>{{ 'پورت' if lang == 'fa' else 'Port' }}</th>
@@ -48,6 +49,11 @@
             <a href="{{ base }}/services/{{ svc.cfg_name }}" style="color:var(--accent-bright);text-decoration:none;font-weight:600;font-family:var(--font-mono);">
               {{ svc.cfg_name }}
             </a>
+          </td>
+          <td>
+            <span class="badge {% if svc.kind == 'backhaul' %}badge-yellow{% elif svc.kind == 'sshtun' %}badge-purple{% else %}badge-green{% endif %}">
+              {{ svc.kind_label }}
+            </span>
           </td>
           <td>
             <span class="status-pill pill-{{ svc.status }}">
