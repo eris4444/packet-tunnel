@@ -4,9 +4,9 @@
 
 {% block breadcrumb %}
 <div class="breadcrumb">
-  <a href="/dashboard"><i class="fas fa-home"></i></a>
+  <a href="{{ base }}/dashboard"><i class="fas fa-home"></i></a>
   <span class="sep">/</span>
-  <a href="/services">{{ 'سرویس‌ها' if session.get('lang') == 'fa' else 'Services' }}</a>
+  <a href="{{ base }}/services">{{ 'سرویس‌ها' if session.get('lang') == 'fa' else 'Services' }}</a>
   <span class="sep">/</span>
   <span>{{ svc.cfg_name }}</span>
 </div>
@@ -126,17 +126,17 @@
 <script>
 async function saveConfig() {
   const content = document.getElementById('configEditor').value;
-  const r = await apiCall('/api/service/{{ svc.cfg_name }}/config', 'POST', {content});
+  const r = await apiCall('{{ base }}/api/service/{{ svc.cfg_name }}/config', 'POST', {content});
   if (r.ok) {
     showToast('{{ "ذخیره شد" if lang == "fa" else "Saved" }}');
-    await apiCall('/api/service/{{ svc.name }}/restart');
+    await apiCall('{{ base }}/api/service/{{ svc.name }}/restart');
     showToast('{{ "راه‌اندازی مجدد انجام شد" if lang == "fa" else "Restarted" }}');
     setTimeout(() => location.reload(), 1000);
   } else showToast('Error: ' + r.error, false);
 }
 
 async function refreshLogs() {
-  const r = await fetch('/api/service/{{ svc.name }}/logs');
+  const r = await fetch('{{ base }}/api/service/{{ svc.name }}/logs');
   const d = await r.json();
   if (d.ok) {
     document.getElementById('logBox').textContent = d.logs;

@@ -860,10 +860,10 @@ async function apiCall(url, method='POST', data=null) {
 
   <nav class="sidebar-nav">
     <div class="nav-section">{{ t[lang]['system'] }}</div>
-    <a href="/dashboard" class="nav-item {% if active == 'dashboard' %}active{% endif %}">
+    <a href="{{ base }}/dashboard" class="nav-item {% if active == 'dashboard' %}active{% endif %}">
       <i class="fas fa-chart-line"></i> {{ t[lang]['dashboard'] }}
     </a>
-    <a href="/services" class="nav-item {% if active == 'services' %}active{% endif %}">
+    <a href="{{ base }}/services" class="nav-item {% if active == 'services' %}active{% endif %}">
       <i class="fas fa-server"></i> {{ t[lang]['services'] }}
       {% if services is defined %}
       <span class="nav-badge">{{ services|length }}</span>
@@ -871,23 +871,23 @@ async function apiCall(url, method='POST', data=null) {
     </a>
 
     <div class="nav-section">{{ t[lang]['fleet'] }}</div>
-    <a href="/nodes" class="nav-item {% if active == 'nodes' %}active{% endif %}">
+    <a href="{{ base }}/nodes" class="nav-item {% if active == 'nodes' %}active{% endif %}">
       <i class="fas fa-sitemap"></i> {{ t[lang]['nodes'] }}
     </a>
 
     <div class="nav-section">{{ t[lang]['tunnel'] }}</div>
-    <a href="/add-server" class="nav-item {% if active == 'add_server' %}active{% endif %}">
+    <a href="{{ base }}/add-server" class="nav-item {% if active == 'add_server' %}active{% endif %}">
       <i class="fas fa-plus-circle"></i> {{ t[lang]['add_server'] }}
     </a>
-    <a href="/add-client" class="nav-item {% if active == 'add_client' %}active{% endif %}">
+    <a href="{{ base }}/add-client" class="nav-item {% if active == 'add_client' %}active{% endif %}">
       <i class="fas fa-plug"></i> {{ t[lang]['add_client'] }}
     </a>
 
     <div class="nav-section">{{ t[lang]['admin'] }}</div>
-    <a href="/telegram" class="nav-item {% if active == 'telegram' %}active{% endif %}">
+    <a href="{{ base }}/telegram" class="nav-item {% if active == 'telegram' %}active{% endif %}">
       <i class="fab fa-telegram"></i> {{ t[lang]['telegram'] }}
     </a>
-    <a href="/settings" class="nav-item {% if active == 'settings' %}active{% endif %}">
+    <a href="{{ base }}/settings" class="nav-item {% if active == 'settings' %}active{% endif %}">
       <i class="fas fa-cog"></i> {{ t[lang]['settings'] }}
     </a>
   </nav>
@@ -899,7 +899,7 @@ async function apiCall(url, method='POST', data=null) {
         <div class="uname">{{ session.username or 'admin' }}</div>
         <div class="urole">{{ t[lang]['admin'] }}</div>
       </div>
-      <a href="/logout" class="logout-btn" title="{{ t[lang]['logout'] }}"><i class="fas fa-sign-out-alt"></i></a>
+      <a href="{{ base }}/logout" class="logout-btn" title="{{ t[lang]['logout'] }}"><i class="fas fa-sign-out-alt"></i></a>
     </div>
   </div>
 </aside>
@@ -1005,12 +1005,12 @@ function setTheme(t) {
 setTheme(THEME);
 function toggleTheme() {
   const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-  fetch('/settings', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:`action=change_theme&theme=${cur}` });
+  fetch('{{ base }}/settings', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:`action=change_theme&theme=${cur}` });
   setTheme(cur);
 }
 function toggleLang() {
   const nl = LANG === 'en' ? 'fa' : 'en';
-  fetch('/settings', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:`action=change_language&language=${nl}` })
+  fetch('{{ base }}/settings', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:`action=change_language&language=${nl}` })
     .then(() => location.reload());
 }
 
@@ -1073,7 +1073,7 @@ function deleteSvc(svcName, cfgName) {
     async () => {
       const r = await apiCall(`/api/service/${cfgName}/delete`);
       showToast(r.ok ? (LANG==='fa'?'حذف شد':'Deleted') : 'Error', r.ok);
-      if (r.ok) setTimeout(() => window.location.href='/services', 700);
+      if (r.ok) setTimeout(() => window.location.href='{{ base }}/services', 700);
     }
   );
 }
@@ -1083,7 +1083,7 @@ async function refreshStats() {
   const icon = document.getElementById('refreshIcon');
   icon.style.animation = 'spin .6s linear infinite';
   try {
-    const s = await (await fetch('/api/stats')).json();
+    const s = await (await fetch('{{ base }}/api/stats')).json();
     ['cpu','mem','disk','load'].forEach(k => {
       const el = document.getElementById('stat-'+k);
       if (el) el.textContent = s[k] || '-';

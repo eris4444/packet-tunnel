@@ -13,10 +13,10 @@
     </p>
   </div>
   <div style="display:flex;gap:10px">
-    <a href="/add-server" class="btn btn-primary">
+    <a href="{{ base }}/add-server" class="btn btn-primary">
       <i class="fas fa-plus"></i> {{ 'سرور' if lang == 'fa' else 'Server' }}
     </a>
-    <a href="/add-client" class="btn btn-secondary">
+    <a href="{{ base }}/add-client" class="btn btn-secondary">
       <i class="fas fa-plug"></i> {{ 'کلاینت' if lang == 'fa' else 'Client' }}
     </a>
   </div>
@@ -45,7 +45,7 @@
         <tr>
           <td style="color:var(--text-muted);font-size:.8rem">{{ loop.index }}</td>
           <td>
-            <a href="/services/{{ svc.cfg_name }}" style="color:var(--accent-bright);text-decoration:none;font-weight:600;font-family:var(--font-mono);">
+            <a href="{{ base }}/services/{{ svc.cfg_name }}" style="color:var(--accent-bright);text-decoration:none;font-weight:600;font-family:var(--font-mono);">
               {{ svc.cfg_name }}
             </a>
           </td>
@@ -88,7 +88,7 @@
                 <i class="fas fa-play"></i>
               </button>
               {% endif %}
-              <a href="/services/{{ svc.cfg_name }}" class="btn btn-secondary btn-xs" title="{{ 'جزئیات' if lang == 'fa' else 'Details' }}">
+              <a href="{{ base }}/services/{{ svc.cfg_name }}" class="btn btn-secondary btn-xs" title="{{ 'جزئیات' if lang == 'fa' else 'Details' }}">
                 <i class="fas fa-eye"></i>
               </a>
               <button class="btn btn-danger btn-xs" onclick="deleteSvc('{{ svc.name }}','{{ svc.cfg_name }}')" title="{{ 'حذف' if lang == 'fa' else 'Delete' }}">
@@ -127,10 +127,10 @@
     {{ 'یک سرور یا کلاینت اضافه کنید تا شروع کنید' if lang == 'fa' else 'Add a server or client to get started' }}
   </p>
   <div style="display:flex;gap:12px;justify-content:center">
-    <a href="/add-server" class="btn btn-primary">
+    <a href="{{ base }}/add-server" class="btn btn-primary">
       <i class="fas fa-plus"></i> {{ 'افزودن سرور' if lang == 'fa' else 'Add Server' }}
     </a>
-    <a href="/add-client" class="btn btn-secondary">
+    <a href="{{ base }}/add-client" class="btn btn-secondary">
       <i class="fas fa-plug"></i> {{ 'افزودن کلاینت' if lang == 'fa' else 'Add Client' }}
     </a>
   </div>

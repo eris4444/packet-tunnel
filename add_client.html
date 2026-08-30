@@ -18,7 +18,7 @@
       {{ 'شبکه: ' if lang == 'fa' else 'Network: ' }} <strong>{{ net.interface }}</strong> — {{ net.local_ip }}
     </div>
 
-    <form method="POST" action="/add-client">
+    <form method="POST" action="{{ base }}/add-client">
 
       <div class="form-row">
         <div class="form-group">
@@ -156,7 +156,7 @@
 
       <div class="divider"></div>
       <div style="display:flex;gap:12px;justify-content:flex-end">
-        <a href="/services" class="btn btn-secondary">{{ 'انصراف' if lang == 'fa' else 'Cancel' }}</a>
+        <a href="{{ base }}/services" class="btn btn-secondary">{{ 'انصراف' if lang == 'fa' else 'Cancel' }}</a>
         <button type="submit" class="btn btn-primary">
           <i class="fas fa-plug"></i>
           {{ 'ایجاد کلاینت' if lang == 'fa' else 'Create Client' }}

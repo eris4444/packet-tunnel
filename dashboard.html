@@ -128,11 +128,11 @@
       <div class="card-title"><i class="fas fa-bolt"></i> {{ 'اقدامات سریع' if lang == 'fa' else 'Quick Actions' }}</div>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      <a href="/add-server" class="btn btn-primary w-full" style="justify-content:center">
+      <a href="{{ base }}/add-server" class="btn btn-primary w-full" style="justify-content:center">
         <i class="fas fa-plus-circle"></i>
         {{ 'افزودن سرور (Kharej)' if lang == 'fa' else 'Add Server (Kharej)' }}
       </a>
-      <a href="/add-client" class="btn btn-secondary w-full" style="justify-content:center">
+      <a href="{{ base }}/add-client" class="btn btn-secondary w-full" style="justify-content:center">
         <i class="fas fa-plug"></i>
         {{ 'افزودن کلاینت (Iran)' if lang == 'fa' else 'Add Client (Iran)' }}
       </a>
@@ -154,7 +154,7 @@
 <div class="card fade-in">
   <div class="card-header">
     <div class="card-title"><i class="fas fa-list-ul"></i> {{ 'سرویس‌ها' if lang == 'fa' else 'Services' }}</div>
-    <a href="/services" class="btn btn-secondary btn-sm">
+    <a href="{{ base }}/services" class="btn btn-secondary btn-sm">
       {{ 'مشاهده همه' if lang == 'fa' else 'View All' }} <i class="fas fa-arrow-right"></i>
     </a>
   </div>
@@ -176,7 +176,7 @@
         {% for svc in services[:5] %}
         <tr>
           <td>
-            <a href="/services/{{ svc.cfg_name }}" style="color:var(--accent-bright);text-decoration:none;font-weight:600;">
+            <a href="{{ base }}/services/{{ svc.cfg_name }}" style="color:var(--accent-bright);text-decoration:none;font-weight:600;">
               {{ svc.cfg_name }}
             </a>
           </td>
@@ -206,7 +206,7 @@
                 <i class="fas fa-play"></i>
               </button>
               {% endif %}
-              <a href="/services/{{ svc.cfg_name }}" class="btn btn-secondary btn-xs">
+              <a href="{{ base }}/services/{{ svc.cfg_name }}" class="btn btn-secondary btn-xs">
                 <i class="fas fa-eye"></i>
               </a>
             </div>
@@ -221,7 +221,7 @@
     <i class="fas fa-server" style="font-size:2.5rem;opacity:.3;display:block;margin-bottom:12px"></i>
     {{ 'هنوز سرویسی وجود ندارد.' if lang == 'fa' else 'No services yet.' }}
     <br>
-    <a href="/add-server" class="btn btn-primary mt-4" style="margin-top:14px;display:inline-flex">
+    <a href="{{ base }}/add-server" class="btn btn-primary mt-4" style="margin-top:14px;display:inline-flex">
       <i class="fas fa-plus"></i> {{ 'ایجاد اولین سرویس' if lang == 'fa' else 'Create First Service' }}
     </a>
   </div>
@@ -247,7 +247,7 @@ async function loadTrafficChart() {
 
   let data = [];
   try {
-    data = await (await fetch('/api/traffic/history?hours=168')).json();
+    data = await (await fetch('{{ base }}/api/traffic/history?hours=168')).json();
   } catch (e) {}
 
   if (!Array.isArray(data) || data.length < 2) {
@@ -306,13 +306,13 @@ async function loadTrafficChart() {
 async function installPaqet(btn) {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>';
-  const r = await apiCall('/api/install-paqet');
+  const r = await apiCall('{{ base }}/api/install-paqet');
   showToast(r.ok ? `Paqet ${r.version} installed!` : (r.error || 'Install failed'), r.ok);
   if (r.ok) setTimeout(() => location.reload(), 1000);
   else { btn.disabled = false; btn.innerHTML = '<i class="fas fa-download"></i> Install'; }
 }
 async function optimizeSysctl() {
-  const r = await apiCall('/api/optimize/sysctl');
+  const r = await apiCall('{{ base }}/api/optimize/sysctl');
   showToast(r.ok ? '{{ "شبکه بهینه شد" if lang == "fa" else "Network optimized" }}' : 'Error', r.ok);
 }
 </script>

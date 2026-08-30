@@ -257,7 +257,7 @@ body::after{
     {% endif %}
     {% endwith %}
 
-    <form method="POST" action="/login">
+    <form method="POST" action="{{ base }}/login">
       <div class="form-group">
         <label class="form-label" for="username">{{ 'نام کاربری' if lang == 'fa' else 'Username' }}</label>
         <div class="input-wrap">
@@ -316,7 +316,7 @@ function toggleTheme() {
   const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
   setThemeIcon(next);
-  fetch('/prefs', {
+  fetch('{{ base }}/prefs', {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
     body: `theme=${next}`
@@ -324,7 +324,7 @@ function toggleTheme() {
 }
 
 function toggleLang() {
-  fetch('/prefs', {
+  fetch('{{ base }}/prefs', {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
     body: `language=${LANG === 'en' ? 'fa' : 'en'}`

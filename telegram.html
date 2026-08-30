@@ -19,7 +19,7 @@
       {% endif %}
     </p>
 
-    <form method="POST" action="/telegram" id="telegramForm">
+    <form method="POST" action="{{ base }}/telegram" id="telegramForm">
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">{{ 'توکن ربات' if lang == 'fa' else 'Bot Token' }}</label>
@@ -89,7 +89,7 @@ async function sendTestMessage(btn) {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>';
   try {
-    const r = await apiCall('/api/telegram/test', 'POST');
+    const r = await apiCall('{{ base }}/api/telegram/test', 'POST');
     showToast(r.ok
       ? (LANG === 'fa' ? 'پیام تست ارسال شد' : 'Test message sent')
       : (r.error || (LANG === 'fa' ? 'ارسال ناموفق بود' : 'Send failed')), r.ok);

@@ -47,6 +47,18 @@ class ScriptNamePrefix:
 
 app.wsgi_app = ScriptNamePrefix(app.wsgi_app)
 
+
+@app.context_processor
+def inject_base_path():
+    """Expose the mount point to templates as {{ base }}.
+
+    Templates hardcode absolute paths like /services rather than calling
+    url_for(), so SCRIPT_NAME alone would not reach them and every link
+    would escape the Ex-ui tab and hit the panel root. Standalone this is
+    '' and the paths are unchanged.
+    """
+    return {'base': request.environ.get('SCRIPT_NAME', '')}
+
 # ── Paths ────────────────────────────────────────────────────
 CONFIG_DIR   = '/etc/paqet'
 SERVICE_DIR  = '/etc/systemd/system'

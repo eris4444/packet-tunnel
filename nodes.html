@@ -304,7 +304,7 @@ async function loadNodes() {
   const icon = document.querySelector('#refreshNodesBtn i');
   if (icon) icon.style.animation = 'spin .6s linear infinite';
   try {
-    const r = await (await fetch('/api/nodes')).json();
+    const r = await (await fetch('{{ base }}/api/nodes')).json();
     if (r.ok) grid.innerHTML = r.nodes.map(nodeCardHtml).join('');
   } catch (e) {}
   if (icon) icon.style.animation = '';
@@ -322,7 +322,7 @@ async function addNode(btn) {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>';
   try {
-    const r = await apiCall('/api/nodes/add', 'POST', { name, url, token });
+    const r = await apiCall('{{ base }}/api/nodes/add', 'POST', { name, url, token });
     if (r.ok) {
       showToast(FA ? 'نود اضافه شد' : 'Node added', true);
       setTimeout(() => location.reload(), 700);
@@ -371,7 +371,7 @@ function regenToken(btn) {
     FA ? 'توکن فعلی باطل می‌شود و هر پنلی که این سرور را اضافه کرده قطع خواهد شد. ادامه؟'
        : 'The current token is revoked — any panel that added this server will stop seeing it. Continue?',
     async () => {
-      const r = await apiCall('/api/node/token/regenerate', 'POST');
+      const r = await apiCall('{{ base }}/api/node/token/regenerate', 'POST');
       if (r.ok) {
         const el = document.getElementById('tokenText');
         el.dataset.token = r.token;
