@@ -64,11 +64,23 @@ CONFIG_DIR   = '/etc/paqet'
 SERVICE_DIR  = '/etc/systemd/system'
 BIN_PATH     = '/usr/local/bin/paqet'
 PANEL_CONFIG = '/etc/paqet-panel/config.json'
+
+# Each tunnel kind owns a systemd unit prefix so one panel can manage all of
+# them side by side and a unit's name alone says how to read its config.
+BACKHAUL_BIN = '/usr/local/bin/backhaul'
+BACKHAUL_DIR = '/etc/backhaul'
+SSH_DIR      = '/etc/paqet-panel/ssh'
+TUNNEL_KINDS = {'paqet': 'Packet', 'backhaul': 'Backhaul', 'sshtun': 'SSH'}
+SVC_NAME_RE  = re.compile(r'^(?:' + '|'.join(TUNNEL_KINDS) + r')-[a-zA-Z0-9_-]+$')
+SAFE_NAME_RE = re.compile(r'^[a-zA-Z0-9_-]+$')
 PANEL_VERSION = '3.1.0'
 PANEL_PORT   = int(os.environ.get('PANEL_PORT', '7777'))
 
 os.makedirs('/etc/paqet-panel', exist_ok=True)
 os.makedirs(CONFIG_DIR, exist_ok=True)
+os.makedirs(BACKHAUL_DIR, exist_ok=True)
+# Private keys live here, so keep the directory owner-only from the start.
+os.makedirs(SSH_DIR, mode=0o700, exist_ok=True)
 
 # ── Panel config ─────────────────────────────────────────────
 def load_panel_config():
@@ -177,9 +189,88 @@ def run_cmd(cmd, timeout=15):
     except Exception as e:
         return '', str(e), 1
 
+def _read_paqet_meta(cfg_name):
+    """role/mode/mtu/conn/port for a paqet tunnel, read from its YAML."""
+    meta = {'role': 'unknown', 'mode': 'unknown', 'mtu': '-', 'conn': '-', 'port': '-'}
+    cfg_path = f"{CONFIG_DIR}/{cfg_name}.yaml"
+    if not os.path.exists(cfg_path):
+        return meta
+    try:
+        import yaml
+        with open(cfg_path) as f:
+            raw = yaml.safe_load(f)
+        if raw:
+            meta['role'] = raw.get('role', 'unknown')
+            kcp = raw.get('transport', {}).get('kcp', {})
+            meta['mode'] = kcp.get('mode', 'fast')
+            meta['mtu'] = str(kcp.get('mtu', '-'))
+            meta['conn'] = str(raw.get('transport', {}).get('conn', '-'))
+            listen = raw.get('listen', {})
+            if listen:
+                meta['port'] = listen.get('addr', '-').split(':')[-1]
+            srv = raw.get('server', {})
+            if srv:
+                meta['port'] = srv.get('addr', '-').split(':')[-1]
+    except Exception:
+        pass
+    return meta
+
+
+def _read_backhaul_meta(cfg_name):
+    """role/transport/port for a backhaul tunnel, read from its TOML.
+
+    Parsed by hand rather than with tomllib so this keeps working on the
+    Python 3.8 images some of these boxes still run.
+    """
+    meta = {'role': 'unknown', 'mode': '-', 'mtu': '-', 'conn': '-', 'port': '-'}
+    cfg_path = f"{BACKHAUL_DIR}/{cfg_name}.toml"
+    if not os.path.exists(cfg_path):
+        return meta
+    try:
+        with open(cfg_path) as f:
+            body = f.read()
+        meta['role'] = 'server' if '[server]' in body else 'client' if '[client]' in body else 'unknown'
+        m = re.search(r'^\s*transport\s*=\s*"([^"]+)"', body, re.M)
+        if m:
+            meta['mode'] = m.group(1)
+        m = re.search(r'^\s*(?:bind_addr|remote_addr)\s*=\s*"([^"]+)"', body, re.M)
+        if m:
+            meta['port'] = m.group(1).split(':')[-1]
+    except Exception:
+        pass
+    return meta
+
+
+def _read_ssh_meta(cfg_name):
+    """role/direction/port for an SSH tunnel, read from the panel's own sidecar
+    JSON — the systemd unit holds the real command, but this is what the UI shows."""
+    meta = {'role': 'client', 'mode': '-', 'mtu': '-', 'conn': '-', 'port': '-'}
+    cfg_path = f"{SSH_DIR}/{cfg_name}.json"
+    if not os.path.exists(cfg_path):
+        return meta
+    try:
+        with open(cfg_path) as f:
+            raw = json.load(f)
+        meta['mode'] = raw.get('direction', '-')
+        meta['port'] = str(raw.get('listen_port', '-'))
+        meta['conn'] = raw.get('ssh_host', '-')
+    except Exception:
+        pass
+    return meta
+
+
+_META_READERS = {
+    'paqet': _read_paqet_meta,
+    'backhaul': _read_backhaul_meta,
+    'sshtun': _read_ssh_meta,
+}
+
+
 def get_services():
+    pattern = r'^\(' + r'\|'.join(TUNNEL_KINDS) + r'\)-'
     out, _, _ = run_cmd(
-        "systemctl list-unit-files --type=service --no-legend --no-pager 2>/dev/null | grep '^paqet-'"
+        "systemctl list-unit-files --type=service --no-legend --no-pager 2>/dev/null "
+        f"| grep '{pattern}'"
     )
     services = []
     for line in out.splitlines():
@@ -187,35 +278,20 @@ def get_services():
         if not parts: continue
         svc_file = parts[0]
         svc_name = svc_file.replace('.service', '')
-        cfg_name = svc_name.replace('paqet-', '')
+        kind, _, cfg_name = svc_name.partition('-')
+        if kind not in TUNNEL_KINDS or not cfg_name:
+            continue
         status, _, _ = run_cmd(f"systemctl is-active {svc_file} 2>/dev/null")
         enabled, _, _ = run_cmd(f"systemctl is-enabled {svc_file} 2>/dev/null")
-        cfg_path = f"{CONFIG_DIR}/{cfg_name}.yaml"
-        role = mode = 'unknown'; mtu = conn = port = '-'
-        if os.path.exists(cfg_path):
-            try:
-                import yaml
-                with open(cfg_path) as f:
-                    raw = yaml.safe_load(f)
-                if raw:
-                    role = raw.get('role', 'unknown')
-                    kcp  = raw.get('transport', {}).get('kcp', {})
-                    mode = kcp.get('mode', 'fast')
-                    mtu  = str(kcp.get('mtu', '-'))
-                    conn = str(raw.get('transport', {}).get('conn', '-'))
-                    listen = raw.get('listen', {})
-                    if listen: port = listen.get('addr', '-').split(':')[-1]
-                    srv = raw.get('server', {})
-                    if srv: port = srv.get('addr', '-').split(':')[-1]
-            except Exception: pass
+        meta = _META_READERS[kind](cfg_name)
         cron_out, _, _ = run_cmd(f"crontab -l 2>/dev/null | grep 'systemctl restart {svc_name}'")
         services.append({
             'name': svc_name, 'cfg_name': cfg_name,
+            'kind': kind, 'kind_label': TUNNEL_KINDS[kind],
             'status': status.strip() or 'unknown',
             'enabled': enabled.strip(),
-            'role': role, 'mode': mode, 'mtu': mtu,
-            'conn': conn, 'port': port,
-            'has_cron': bool(cron_out.strip())
+            'has_cron': bool(cron_out.strip()),
+            **meta,
         })
     return services
 
@@ -290,9 +366,23 @@ def get_system_stats():
         'paqet_installed': os.path.exists(BIN_PATH)
     }
 
+def config_path_for(cfg_name):
+    """Where this tunnel's editable config lives, whichever kind it is.
+
+    SSH tunnels have no hand-editable config -- the systemd unit is the source
+    of truth -- so they return None and the editor stays hidden for them.
+    """
+    yaml_path = f"{CONFIG_DIR}/{cfg_name}.yaml"
+    if os.path.exists(yaml_path):
+        return yaml_path
+    toml_path = f"{BACKHAUL_DIR}/{cfg_name}.toml"
+    if os.path.exists(toml_path):
+        return toml_path
+    return None
+
 def get_config_raw(cfg_name):
-    path = f"{CONFIG_DIR}/{cfg_name}.yaml"
-    if not os.path.exists(path): return ''
+    path = config_path_for(cfg_name)
+    if not path: return ''
     with open(path) as f: return f.read()
 
 def generate_key():
@@ -328,6 +418,60 @@ Restart=always
 RestartSec=5
 LimitNOFILE=65535
 Environment="GOMAXPROCS=0"
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+
+def build_backhaul_service(cfg_name):
+    return f"""[Unit]
+Description=Backhaul Tunnel ({cfg_name})
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart={BACKHAUL_BIN} -c {BACKHAUL_DIR}/{cfg_name}.toml
+Restart=always
+RestartSec=5
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+
+def build_ssh_service(cfg_name, opts):
+    """systemd unit for a persistent SSH tunnel.
+
+    ssh itself does the forwarding and systemd does the supervision, so no
+    autossh is needed: ExitOnForwardFailure turns a refused forward into a
+    non-zero exit and Restart=always brings it back. BatchMode keeps a broken
+    key from parking the unit on a password prompt forever.
+    """
+    flag = '-R' if opts['direction'] == 'reverse' else '-L'
+    forward = f"{opts['listen_addr']}:{opts['listen_port']}:{opts['dest_host']}:{opts['dest_port']}"
+    return f"""[Unit]
+Description=SSH Tunnel ({cfg_name})
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ssh -N -T \\
+  -o BatchMode=yes \\
+  -o ExitOnForwardFailure=yes \\
+  -o ServerAliveInterval=30 \\
+  -o ServerAliveCountMax=3 \\
+  -o StrictHostKeyChecking=accept-new \\
+  -o UserKnownHostsFile={SSH_DIR}/known_hosts \\
+  -i {SSH_DIR}/{cfg_name}.key \\
+  -p {opts['ssh_port']} \\
+  {flag} {forward} \\
+  {opts['ssh_user']}@{opts['ssh_host']}
+Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
@@ -485,6 +629,157 @@ def add_client():
     run_cmd(f"systemctl enable {svc_name} --now")
     return redirect(url_for('service_detail', cfg_name=cfg_name))
 
+BACKHAUL_TRANSPORTS = ('tcp', 'tcpmux', 'ws', 'wss', 'wsmux', 'wssmux', 'udp')
+
+
+@app.route('/add-backhaul', methods=['GET', 'POST'])
+@login_required
+def add_backhaul():
+    cfg = load_panel_config()
+    if request.method == 'GET':
+        return render_template('add_backhaul.html', generated_key=generate_key(),
+                               transports=BACKHAUL_TRANSPORTS, cfg=cfg,
+                               installed=os.path.exists(BACKHAUL_BIN), active='add_backhaul')
+
+    d = request.form
+    cfg_name = re.sub(r'[^a-zA-Z0-9_-]', '', d.get('name', '')) or 'backhaul'
+    role = 'server' if d.get('role') == 'server' else 'client'
+    transport = d.get('transport', 'tcp')
+    if transport not in BACKHAUL_TRANSPORTS:
+        transport = 'tcp'
+    token = d.get('token', '') or generate_key()
+    port = re.sub(r'[^0-9]', '', d.get('port', '')) or '3080'
+
+    if role == 'server':
+        # Each line is "public=local"; an empty list is valid and just means
+        # nothing is forwarded yet.
+        ports = []
+        for line in d.get('ports', '').splitlines():
+            line = line.strip()
+            if re.match(r'^\d+(?:-\d+)?(?:=\d+)?$', line):
+                ports.append('"%s"' % line)
+        toml_txt = (
+            '# Backhaul - server\n[server]\n'
+            'bind_addr = ":%s"\n' % port +
+            'transport = "%s"\n' % transport +
+            'token = "%s"\n' % token +
+            'keepalive_period = 75\n'
+            'nodelay = true\n'
+            'heartbeat = 40\n'
+            'channel_size = 2048\n'
+            'ports = [\n' + ''.join('  %s,\n' % p for p in ports) + ']\n'
+        )
+    else:
+        remote = d.get('remote_addr', '').strip()
+        if not re.match(r'^[A-Za-z0-9_.\-\[\]:]+$', remote):
+            return render_template('add_backhaul.html', generated_key=token,
+                                   transports=BACKHAUL_TRANSPORTS, cfg=cfg,
+                                   installed=os.path.exists(BACKHAUL_BIN),
+                                   error='Remote address is not a valid host:port',
+                                   active='add_backhaul')
+        if ':' not in remote:
+            remote = '%s:%s' % (remote, port)
+        toml_txt = (
+            '# Backhaul - client\n[client]\n'
+            'remote_addr = "%s"\n' % remote +
+            'transport = "%s"\n' % transport +
+            'token = "%s"\n' % token +
+            'connection_pool = 8\n'
+            'keepalive_period = 75\n'
+            'nodelay = true\n'
+            'retry_interval = 3\n'
+        )
+
+    os.makedirs(BACKHAUL_DIR, exist_ok=True)
+    with open('%s/%s.toml' % (BACKHAUL_DIR, cfg_name), 'w') as f:
+        f.write(toml_txt)
+
+    svc_name = 'backhaul-%s' % cfg_name
+    with open('%s/%s.service' % (SERVICE_DIR, svc_name), 'w') as f:
+        f.write(build_backhaul_service(cfg_name))
+    run_cmd('systemctl daemon-reload')
+    run_cmd('systemctl enable %s --now' % svc_name)
+    return redirect(url_for('service_detail', cfg_name=cfg_name))
+
+
+@app.route('/add-ssh', methods=['GET', 'POST'])
+@login_required
+def add_ssh():
+    cfg = load_panel_config()
+    if request.method == 'GET':
+        return render_template('add_ssh.html', cfg=cfg, active='add_ssh')
+
+    d = request.form
+    cfg_name = re.sub(r'[^a-zA-Z0-9_-]', '', d.get('name', '')) or 'sshtun'
+    opts = {
+        'direction':   'reverse' if d.get('direction') == 'reverse' else 'local',
+        'ssh_host':    d.get('ssh_host', '').strip(),
+        'ssh_user':    d.get('ssh_user', 'root').strip() or 'root',
+        'ssh_port':    re.sub(r'[^0-9]', '', d.get('ssh_port', '')) or '22',
+        'listen_addr': d.get('listen_addr', '127.0.0.1').strip() or '127.0.0.1',
+        'listen_port': re.sub(r'[^0-9]', '', d.get('listen_port', '')) or '1080',
+        'dest_host':   d.get('dest_host', '127.0.0.1').strip() or '127.0.0.1',
+        'dest_port':   re.sub(r'[^0-9]', '', d.get('dest_port', '')) or '80',
+    }
+    key = d.get('private_key', '')
+
+    # These values land in a systemd ExecStart line, so anything that could
+    # break out of its argument is rejected rather than escaped.
+    host_re = re.compile(r'^[A-Za-z0-9_.\-]+$')
+    bad = None
+    if not host_re.match(opts['ssh_host']):
+        bad = 'SSH host must be a hostname or IP'
+    elif not host_re.match(opts['ssh_user']):
+        bad = 'SSH user contains invalid characters'
+    elif not host_re.match(opts['dest_host']):
+        bad = 'Destination host must be a hostname or IP'
+    elif not re.match(r'^[A-Za-z0-9_.:\-]+$', opts['listen_addr']):
+        bad = 'Listen address is not valid'
+    elif 'PRIVATE KEY' not in key:
+        bad = 'Paste the private key used to reach the SSH host'
+    if bad:
+        return render_template('add_ssh.html', cfg=cfg, error=bad, active='add_ssh')
+
+    os.makedirs(SSH_DIR, mode=0o700, exist_ok=True)
+    key_path = '%s/%s.key' % (SSH_DIR, cfg_name)
+    # ssh refuses a key other users can read, and will not parse CRLF endings.
+    with open(key_path, 'w', newline='\n') as f:
+        f.write(key.replace('\r\n', '\n').strip() + '\n')
+    os.chmod(key_path, 0o600)
+
+    with open('%s/%s.json' % (SSH_DIR, cfg_name), 'w') as f:
+        json.dump(opts, f, indent=2)
+
+    svc_name = 'sshtun-%s' % cfg_name
+    with open('%s/%s.service' % (SERVICE_DIR, svc_name), 'w') as f:
+        f.write(build_ssh_service(cfg_name, opts))
+    run_cmd('systemctl daemon-reload')
+    run_cmd('systemctl enable %s --now' % svc_name)
+    return redirect(url_for('service_detail', cfg_name=cfg_name))
+
+
+@app.route('/api/install-backhaul', methods=['POST'])
+@login_required
+def api_install_backhaul():
+    arch_out, _, _ = run_cmd('uname -m')
+    arch = arch_out.strip()
+    tag = 'amd64' if arch in ('x86_64', 'amd64') else 'arm64' if arch in ('aarch64', 'arm64') else None
+    if not tag:
+        return jsonify({'ok': False, 'error': 'Unsupported arch: %s' % arch})
+    ver, _, _ = run_cmd("curl -s https://api.github.com/repos/Musixal/Backhaul/releases/latest"
+                        " | grep '\"tag_name\"' | cut -d'\"' -f4")
+    ver = ver.strip() or 'v0.6.6'
+    url = ('https://github.com/Musixal/Backhaul/releases/download/%s/backhaul_linux_%s.tar.gz'
+           % (ver, tag))
+    _, err, rc = run_cmd(
+        "mkdir -p /tmp/backhaul-dl && curl -fsSL '%s' -o /tmp/backhaul-dl/backhaul.tar.gz && "
+        "cd /tmp/backhaul-dl && tar xzf backhaul.tar.gz && "
+        "cp -f $(find /tmp/backhaul-dl -name 'backhaul' -type f | head -1) %s && "
+        "chmod +x %s && rm -rf /tmp/backhaul-dl" % (url, BACKHAUL_BIN, BACKHAUL_BIN),
+        timeout=180)
+    return jsonify({'ok': rc == 0, 'version': ver, 'error': err})
+
+
 @app.route('/prefs', methods=['POST'])
 def prefs():
     """Public UI preferences (theme / language) — usable from the login page."""
@@ -622,7 +917,7 @@ def telegram_page():
 @app.route('/api/service/<svc_name>/<action>', methods=['POST'])
 @login_required
 def api_service_action(svc_name, action):
-    if not re.match(r'^paqet-[a-zA-Z0-9_-]+$', svc_name):
+    if not SVC_NAME_RE.match(svc_name):
         return jsonify({'ok': False, 'error': 'Invalid name'})
     if action not in ('start','stop','restart','enable','disable'):
         return jsonify({'ok': False, 'error': 'Invalid action'})
@@ -633,37 +928,54 @@ def api_service_action(svc_name, action):
 @app.route('/api/service/<cfg_name>/delete', methods=['POST'])
 @login_required
 def api_service_delete(cfg_name):
-    if not re.match(r'^[a-zA-Z0-9_-]+$', cfg_name):
+    if not SAFE_NAME_RE.match(cfg_name):
         return jsonify({'ok': False, 'error': 'Invalid name'})
-    svc = f"paqet-{cfg_name}"
-    run_cmd(f"systemctl stop {svc}.service")
-    run_cmd(f"systemctl disable {svc}.service")
-    run_cmd(f"rm -f {SERVICE_DIR}/{svc}.service")
+    # The config name alone does not say which kind this is, so drop whichever
+    # unit actually exists plus the files belonging to it. A leftover backhaul
+    # .toml or SSH key would otherwise resurrect the tunnel the next time
+    # someone creates one under the same name.
+    removed = []
+    for kind in TUNNEL_KINDS:
+        svc = f"{kind}-{cfg_name}"
+        if not os.path.exists(f"{SERVICE_DIR}/{svc}.service"):
+            continue
+        run_cmd(f"systemctl stop {svc}.service")
+        run_cmd(f"systemctl disable {svc}.service")
+        run_cmd(f"rm -f {SERVICE_DIR}/{svc}.service")
+        run_cmd(f"crontab -l 2>/dev/null | grep -v 'systemctl restart {svc}' | crontab -")
+        removed.append(kind)
+
     run_cmd(f"rm -f {CONFIG_DIR}/{cfg_name}.yaml")
+    run_cmd(f"rm -f {BACKHAUL_DIR}/{cfg_name}.toml")
+    run_cmd(f"rm -f {SSH_DIR}/{cfg_name}.key {SSH_DIR}/{cfg_name}.json")
     run_cmd("systemctl daemon-reload")
-    run_cmd(f"crontab -l 2>/dev/null | grep -v 'systemctl restart {svc}' | crontab -")
-    return jsonify({'ok': True})
+    return jsonify({'ok': True, 'removed': removed})
 
 @app.route('/api/service/<cfg_name>/config', methods=['POST'])
 @login_required
 def api_save_config(cfg_name):
-    if not re.match(r'^[a-zA-Z0-9_-]+$', cfg_name):
+    if not SAFE_NAME_RE.match(cfg_name):
         return jsonify({'ok': False, 'error': 'Invalid name'})
     content = request.json.get('content', '')
-    with open(f"{CONFIG_DIR}/{cfg_name}.yaml", 'w') as f: f.write(content)
+    # Write back to whichever config this tunnel actually owns; hardcoding the
+    # paqet path would drop a backhaul edit into a .yaml nothing ever reads.
+    path = config_path_for(cfg_name)
+    if not path:
+        return jsonify({'ok': False, 'error': 'This tunnel has no editable config file'})
+    with open(path, 'w') as f: f.write(content)
     return jsonify({'ok': True})
 
 @app.route('/api/service/<svc_name>/logs')
 @login_required
 def api_logs(svc_name):
-    if not re.match(r'^paqet-[a-zA-Z0-9_-]+$', svc_name):
+    if not SVC_NAME_RE.match(svc_name):
         return jsonify({'ok': False, 'error': 'Invalid name'})
     return jsonify({'ok': True, 'logs': get_service_logs(svc_name, 100)})
 
 @app.route('/api/cron/<svc_name>/<interval>', methods=['POST'])
 @login_required
 def api_cron(svc_name, interval):
-    if not re.match(r'^paqet-[a-zA-Z0-9_-]+$', svc_name):
+    if not SVC_NAME_RE.match(svc_name):
         return jsonify({'ok': False, 'error': 'Invalid name'})
     intervals = {
         '1min':'*/1 * * * *','5min':'*/5 * * * *','15min':'*/15 * * * *',

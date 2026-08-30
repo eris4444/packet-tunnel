@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Add Backhaul — Erisrtg Panel{% endblock %}
+{% block page_title %}{{ 'افزودن تونل Backhaul' if session.get('lang') == 'fa' else 'Add Backhaul Tunnel' }}{% endblock %}
+
+{% block content %}
+{% set lang = session.get('lang', 'en') %}
+
+<div style="max-width:720px" class="fade-in">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><i class="fas fa-exchange-alt"></i> {{ 'پیکربندی Backhaul' if lang == 'fa' else 'Configure Backhaul' }}</div>
+    </div>
+    <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:24px">
+      {{ 'سرور را روی سرور خارجی و کلاینت را روی سرور ایران بسازید. توکن باید در هر دو یکسان باشد.' if lang == 'fa' else 'Create the server on the foreign box and the client on the Iran box. The token must match on both sides.' }}
+    </p>
+
+    {% if error %}
+    <div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> {{ error }}</div>
+    {% endif %}
+
+    {% if not installed %}
+    <div class="alert alert-warning">
+      <i class="fas fa-exclamation-triangle"></i>
+      {{ 'باینری Backhaul نصب نیست.' if lang == 'fa' else 'The Backhaul binary is not installed.' }}
+      <button type="button" class="btn btn-sm" id="btn-install-backhaul" style="margin-inline-start:8px">
+        {{ 'نصب کن' if lang == 'fa' else 'Install now' }}
+      </button>
+      <span id="install-status" style="margin-inline-start:8px"></span>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ base }}/add-backhaul">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">{{ 'نام سرویس' if lang == 'fa' else 'Service Name' }} <span class="req">*</span></label>
+          <input type="text" name="name" class="form-control"
+            placeholder="{{ 'مثلاً: bh1' if lang == 'fa' else 'e.g. bh1' }}"
+            pattern="[a-zA-Z0-9_-]+" required>
+          <div class="form-hint">{{ 'فقط حروف انگلیسی، اعداد، - و _' if lang == 'fa' else 'Letters, numbers, - and _ only' }}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ 'نقش' if lang == 'fa' else 'Role' }} <span class="req">*</span></label>
+          <select name="role" id="bh-role" class="form-control">
+            <option value="server">{{ 'سرور (خارج)' if lang == 'fa' else 'Server (foreign)' }}</option>
+            <option value="client">{{ 'کلاینت (ایران)' if lang == 'fa' else 'Client (Iran)' }}</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">{{ 'ترنسپورت' if lang == 'fa' else 'Transport' }}</label>
+          <select name="transport" class="form-control">
+            {% for t in transports %}
+            <option value="{{ t }}">{{ t }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-hint">{{ 'در سرور و کلاینت باید یکسان باشد' if lang == 'fa' else 'Must match on both sides' }}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ 'پورت تونل' if lang == 'fa' else 'Tunnel Port' }}</label>
+          <input type="number" name="port" class="form-control" value="3080" min="1" max="65535">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">{{ 'توکن' if lang == 'fa' else 'Token' }} <span class="req">*</span></label>
+        <input type="text" name="token" class="form-control" value="{{ generated_key }}" required>
+        <div class="form-hint">{{ 'همین توکن را در سمت دیگر هم وارد کنید' if lang == 'fa' else 'Use this same token on the other side' }}</div>
+      </div>
+
+      <div class="form-group" id="bh-server-only">
+        <label class="form-label">{{ 'پورت‌های فوروارد' if lang == 'fa' else 'Forwarded Ports' }}</label>
+        <textarea name="ports" class="form-control" rows="4" placeholder="8080=8080&#10;2053=2053"></textarea>
+        <div class="form-hint">{{ 'هر خط یک مورد: پورت_عمومی=پورت_مقصد' if lang == 'fa' else 'One per line: public=local' }}</div>
+      </div>
+
+      <div class="form-group" id="bh-client-only" style="display:none">
+        <label class="form-label">{{ 'آدرس سرور' if lang == 'fa' else 'Remote Address' }} <span class="req">*</span></label>
+        <input type="text" name="remote_addr" class="form-control" placeholder="1.2.3.4:3080">
+        <div class="form-hint">{{ 'آی‌پی سرور خارجی به همراه پورت تونل' if lang == 'fa' else 'Foreign server IP with the tunnel port' }}</div>
+      </div>
+
+      <button type="submit" class="btn btn-primary">
+        <i class="fas fa-plus"></i> {{ 'ساخت تونل' if lang == 'fa' else 'Create Tunnel' }}
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+  const roleSel = document.getElementById('bh-role');
+  const serverOnly = document.getElementById('bh-server-only');
+  const clientOnly = document.getElementById('bh-client-only');
+  function syncRole() {
+    const isServer = roleSel.value === 'server';
+    serverOnly.style.display = isServer ? '' : 'none';
+    clientOnly.style.display = isServer ? 'none' : '';
+    clientOnly.querySelector('input').required = !isServer;
+  }
+  roleSel.addEventListener('change', syncRole);
+  syncRole();
+
+  const installBtn = document.getElementById('btn-install-backhaul');
+  if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+      const status = document.getElementById('install-status');
+      installBtn.disabled = true;
+      status.textContent = '...';
+      try {
+        const r = await fetch('{{ base }}/api/install-backhaul', { method: 'POST' });
+        const j = await r.json();
+        status.textContent = j.ok ? (j.version || 'ok') : (j.error || 'failed');
+        if (j.ok) location.reload();
+      } catch (e) {
+        status.textContent = String(e);
+      } finally {
+        installBtn.disabled = false;
+      }
+    });
+  }
+</script>
+{% endblock %}

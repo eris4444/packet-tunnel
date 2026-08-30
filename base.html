@@ -835,14 +835,16 @@ async function apiCall(url, method='POST', data=null) {
     'add_client': 'Add Client', 'settings': 'Settings', 'logout': 'Logout',
     'overview': 'Overview', 'manage': 'Manage', 'configure': 'Configure',
     'system': 'SYSTEM', 'tunnel': 'TUNNEL', 'admin': 'Administrator',
-    'optimize': 'Optimize', 'nodes': 'Nodes', 'fleet': 'FLEET', 'telegram': 'Telegram'
+    'optimize': 'Optimize', 'nodes': 'Nodes', 'fleet': 'FLEET', 'telegram': 'Telegram',
+    'add_backhaul': 'Add Backhaul', 'add_ssh': 'Add SSH Tunnel'
   },
   'fa': {
     'dashboard': 'داشبورد', 'services': 'سرویس‌ها', 'add_server': 'افزودن سرور',
     'add_client': 'افزودن کلاینت', 'settings': 'تنظیمات', 'logout': 'خروج',
     'overview': 'نمای کلی', 'manage': 'مدیریت', 'configure': 'پیکربندی',
     'system': 'سیستم', 'tunnel': 'تانل', 'admin': 'مدیر',
-    'optimize': 'بهینه‌سازی', 'nodes': 'نودها', 'fleet': 'ناوگان', 'telegram': 'تلگرام'
+    'optimize': 'بهینه‌سازی', 'nodes': 'نودها', 'fleet': 'ناوگان', 'telegram': 'تلگرام',
+    'add_backhaul': 'افزودن Backhaul', 'add_ssh': 'افزودن تونل SSH'
   }
 } %}
 
@@ -881,6 +883,12 @@ async function apiCall(url, method='POST', data=null) {
     </a>
     <a href="{{ base }}/add-client" class="nav-item {% if active == 'add_client' %}active{% endif %}">
       <i class="fas fa-plug"></i> {{ t[lang]['add_client'] }}
+    </a>
+    <a href="{{ base }}/add-backhaul" class="nav-item {% if active == 'add_backhaul' %}active{% endif %}">
+      <i class="fas fa-exchange-alt"></i> {{ t[lang]['add_backhaul'] }}
+    </a>
+    <a href="{{ base }}/add-ssh" class="nav-item {% if active == 'add_ssh' %}active{% endif %}">
+      <i class="fas fa-terminal"></i> {{ t[lang]['add_ssh'] }}
     </a>
 
     <div class="nav-section">{{ t[lang]['admin'] }}</div>

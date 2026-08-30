@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Add SSH Tunnel — Erisrtg Panel{% endblock %}
+{% block page_title %}{{ 'افزودن تونل SSH' if session.get('lang') == 'fa' else 'Add SSH Tunnel' }}{% endblock %}
+
+{% block content %}
+{% set lang = session.get('lang', 'en') %}
+
+<div style="max-width:720px" class="fade-in">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><i class="fas fa-terminal"></i> {{ 'پیکربندی تونل SSH' if lang == 'fa' else 'Configure SSH Tunnel' }}</div>
+    </div>
+    <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:24px">
+      {{ 'تونل با کلید خصوصی وصل می‌شود و systemd آن را زنده نگه می‌دارد. احراز هویت با رمز پشتیبانی نمی‌شود.' if lang == 'fa' else 'The tunnel authenticates with a private key and systemd keeps it alive. Password auth is not supported.' }}
+    </p>
+
+    {% if error %}
+    <div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> {{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="{{ base }}/add-ssh">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">{{ 'نام سرویس' if lang == 'fa' else 'Service Name' }} <span class="req">*</span></label>
+          <input type="text" name="name" class="form-control"
+            placeholder="{{ 'مثلاً: ssh1' if lang == 'fa' else 'e.g. ssh1' }}"
+            pattern="[a-zA-Z0-9_-]+" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ 'جهت' if lang == 'fa' else 'Direction' }}</label>
+          <select name="direction" class="form-control">
+            <option value="local">{{ 'Local (-L) — پورت محلی به مقصد' if lang == 'fa' else 'Local (-L) — local port to destination' }}</option>
+            <option value="reverse">{{ 'Reverse (-R) — پورت روی سرور راه دور' if lang == 'fa' else 'Reverse (-R) — port on the remote host' }}</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">{{ 'هاست SSH' if lang == 'fa' else 'SSH Host' }} <span class="req">*</span></label>
+          <input type="text" name="ssh_host" class="form-control" placeholder="1.2.3.4" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ 'پورت SSH' if lang == 'fa' else 'SSH Port' }}</label>
+          <input type="number" name="ssh_port" class="form-control" value="22" min="1" max="65535">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">{{ 'کاربر SSH' if lang == 'fa' else 'SSH User' }}</label>
+        <input type="text" name="ssh_user" class="form-control" value="root">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">{{ 'آدرس گوش‌دادن' if lang == 'fa' else 'Listen Address' }}</label>
+          <input type="text" name="listen_addr" class="form-control" value="127.0.0.1">
+          <div class="form-hint">{{ 'برای دسترسی از بیرون 0.0.0.0 بگذارید' if lang == 'fa' else 'Use 0.0.0.0 to accept outside connections' }}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ 'پورت گوش‌دادن' if lang == 'fa' else 'Listen Port' }}</label>
+          <input type="number" name="listen_port" class="form-control" value="1080" min="1" max="65535">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">{{ 'هاست مقصد' if lang == 'fa' else 'Destination Host' }}</label>
+          <input type="text" name="dest_host" class="form-control" value="127.0.0.1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ 'پورت مقصد' if lang == 'fa' else 'Destination Port' }}</label>
+          <input type="number" name="dest_port" class="form-control" value="80" min="1" max="65535">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">{{ 'کلید خصوصی' if lang == 'fa' else 'Private Key' }} <span class="req">*</span></label>
+        <textarea name="private_key" class="form-control" rows="7" required
+          placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+        <div class="form-hint">
+          {{ 'کلید با دسترسی 600 ذخیره می‌شود. کلید عمومی متناظر باید در authorized_keys سرور مقصد باشد.' if lang == 'fa' else 'Stored with 0600 permissions. Its public key must already be in the remote host authorized_keys.' }}
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary">
+        <i class="fas fa-plus"></i> {{ 'ساخت تونل' if lang == 'fa' else 'Create Tunnel' }}
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
