@@ -19,6 +19,34 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app = Flask(__name__, template_folder=BASE_DIR)
 app.secret_key = os.environ.get('PANEL_SECRET', secrets.token_hex(32))
 
+
+class ScriptNamePrefix:
+    """Honour the mount point Ex-ui's Packet tab proxies this panel under.
+
+    Ex-ui serves us at /panel/packet/ on its own port. url_for() would still
+    emit '/services', which inside the tab resolves against the panel root and
+    404s, so SCRIPT_NAME is taken from the proxy's X-Script-Name header and
+    Werkzeug prefixes every generated URL with it. Only loopback requests are
+    trusted, matching the login bypass, so an outside caller cannot forge the
+    prefix and poison generated links.
+    """
+
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        prefix = environ.get('HTTP_X_SCRIPT_NAME', '')
+        if prefix and environ.get('REMOTE_ADDR') in ('127.0.0.1', '::1'):
+            prefix = '/' + prefix.strip('/')
+            environ['SCRIPT_NAME'] = prefix
+            path = environ.get('PATH_INFO', '')
+            if path.startswith(prefix):
+                environ['PATH_INFO'] = path[len(prefix):]
+        return self.wsgi_app(environ, start_response)
+
+
+app.wsgi_app = ScriptNamePrefix(app.wsgi_app)
+
 # ── Paths ────────────────────────────────────────────────────
 CONFIG_DIR   = '/etc/paqet'
 SERVICE_DIR  = '/etc/systemd/system'
