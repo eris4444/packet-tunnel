@@ -78,9 +78,27 @@ def save_panel_config(cfg):
         pass
 
 # ── Auth ──────────────────────────────────────────────────────
+# Shared secret used by Ex-ui's server-side reverse proxy (internal/web/controller/packet.go)
+# to skip this panel's own login when it's already gated behind Ex-ui's session auth. Only
+# set when deployed alongside Ex-ui; empty/unset means the bypass is never checked.
+PACKET_PROXY_SECRET = os.environ.get('PACKET_PROXY_SECRET', '')
+
+def _is_ex_ui_proxy_request():
+    # The secret alone isn't enough: this app binds 0.0.0.0 by default (see app.run
+    # below), so a request straight from the internet could carry a guessed/leaked
+    # header. Only loopback traffic — i.e. requests that actually went through Ex-ui's
+    # same-host proxy — is eligible for the bypass.
+    if not PACKET_PROXY_SECRET:
+        return False
+    if request.remote_addr not in ('127.0.0.1', '::1'):
+        return False
+    return hmac.compare_digest(request.headers.get('X-Packet-Secret', ''), PACKET_PROXY_SECRET)
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        if _is_ex_ui_proxy_request():
+            return f(*args, **kwargs)
         if not session.get('logged_in'):
             return redirect(url_for('login'))
         return f(*args, **kwargs)
