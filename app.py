@@ -112,10 +112,10 @@ def save_panel_config(cfg):
 PACKET_PROXY_SECRET = os.environ.get('PACKET_PROXY_SECRET', '')
 
 def _is_ex_ui_proxy_request():
-    # The secret alone isn't enough: this app binds 0.0.0.0 by default (see app.run
-    # below), so a request straight from the internet could carry a guessed/leaked
-    # header. Only loopback traffic — i.e. requests that actually went through Ex-ui's
-    # same-host proxy — is eligible for the bypass.
+    # The secret alone is not enough: PANEL_BIND can put this app back on a public
+    # interface, where a request straight from the internet could carry a guessed
+    # or leaked header. Only loopback traffic — i.e. what actually came through
+    # Ex-ui's same-host proxy — is eligible for the bypass.
     if not PACKET_PROXY_SECRET:
         return False
     if request.remote_addr not in ('127.0.0.1', '::1'):
@@ -1192,4 +1192,9 @@ if __name__ == '__main__':
     _ssl_ctx = None
     if _cfg.get('ssl_enabled') and _cfg.get('ssl_cert_path') and _cfg.get('ssl_key_path'):
         _ssl_ctx = (_cfg['ssl_cert_path'], _cfg['ssl_key_path'])
-    app.run(host='0.0.0.0', port=_port, debug=False, ssl_context=_ssl_ctx)
+    # Behind Ex-ui the only client is its reverse proxy on this same host, so
+    # binding loopback keeps the port off the public interface entirely: nothing
+    # outside the box can reach this panel or its login. PANEL_BIND=0.0.0.0
+    # restores the standalone behaviour for an install without Ex-ui.
+    _host = os.environ.get('PANEL_BIND', '127.0.0.1')
+    app.run(host=_host, port=_port, debug=False, ssl_context=_ssl_ctx)
