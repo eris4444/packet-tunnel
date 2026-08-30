@@ -85,6 +85,12 @@
 .empty-state i { font-size: 2.6rem; opacity: .28; display: block; margin-bottom: 14px; }
 
 .skeleton { color: var(--text-disabled); }
+
+@media (max-width: 768px) {
+  .node-grid { grid-template-columns: 1fr; }
+  .token-box { align-items: stretch; }
+  .token-text { min-width: 0; }
+}
 </style>
 {% endblock %}
 

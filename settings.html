@@ -94,6 +94,75 @@
     </form>
   </div>
 
+  <!-- Panel Network / HTTPS -->
+  <div class="card mb-6" style="margin-bottom:20px">
+    <div class="card-title" style="margin-bottom:20px"><i class="fas fa-lock"></i> {{ 'شبکه پنل / HTTPS' if lang == 'fa' else 'Panel Network / HTTPS' }}</div>
+
+    <p class="form-hint" style="margin-top:0;margin-bottom:16px">
+      {% if lang == 'fa' %}
+        تغییر هرکدام از این‌ها پنل را ری‌استارت می‌کند. اگر پورت یا HTTPS را تغییر دهید، آدرسی که با آن به پنل وصل می‌شوید هم عوض می‌شود.
+      {% else %}
+        Changing either of these restarts the panel. If you change the port or enable HTTPS, the address you use to reach it changes too.
+      {% endif %}
+    </p>
+
+    <div class="alert alert-info" style="margin-bottom:18px">
+      <i class="fas fa-circle-info"></i>
+      <span>
+        {% if lang == 'fa' %}
+          وضعیت فعلی: پورت <b>{{ cfg.panel_port or 7777 }}</b> ·
+          {{ 'HTTPS فعال' if cfg.ssl_enabled else 'HTTP ساده' }}
+        {% else %}
+          Current: port <b>{{ cfg.panel_port or 7777 }}</b> ·
+          {{ 'HTTPS enabled' if cfg.ssl_enabled else 'plain HTTP' }}
+        {% endif %}
+      </span>
+    </div>
+
+    <form method="POST" action="/settings" id="networkForm">
+      <input type="hidden" name="action" value="change_network">
+      <div class="form-group">
+        <label class="form-label">{{ 'پورت پنل' if lang == 'fa' else 'Panel Port' }}</label>
+        <input type="number" name="panel_port" class="form-control" style="max-width:160px"
+               value="{{ cfg.panel_port or 7777 }}" min="1" max="65535" required>
+      </div>
+
+      <div class="form-group">
+        <label class="toggle-group" style="cursor:pointer">
+          <span class="toggle">
+            <input type="checkbox" name="ssl_enabled" id="sslToggle" {{ 'checked' if cfg.ssl_enabled }}>
+            <span class="toggle-slider"></span>
+          </span>
+          <span>{{ 'فعال‌سازی HTTPS' if lang == 'fa' else 'Enable HTTPS' }}</span>
+        </label>
+      </div>
+
+      <div id="sslFields" style="{{ '' if cfg.ssl_enabled else 'display:none' }}">
+        <div class="form-group">
+          <label class="form-label">{{ 'گواهی TLS (PEM)' if lang == 'fa' else 'TLS Certificate (PEM)' }}</label>
+          <textarea name="ssl_cert" class="form-control mono" rows="6"
+                    placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+          <div class="form-hint">
+            {% if lang == 'fa' %}
+              {% if cfg.ssl_cert_path %}یک گواهی از قبل ذخیره شده — برای جایگزینی، گواهی جدید را اینجا بچسبانید.{% else %}کل فایل .crt یا .pem را اینجا بچسبانید.{% endif %}
+            {% else %}
+              {% if cfg.ssl_cert_path %}A certificate is already saved — paste a new one here to replace it.{% else %}Paste the entire .crt / .pem file here.{% endif %}
+            {% endif %}
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ 'کلید خصوصی (PEM)' if lang == 'fa' else 'Private Key (PEM)' }}</label>
+          <textarea name="ssl_key" class="form-control mono" rows="6"
+                    placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-warning btn-sm">
+        <i class="fas fa-rotate"></i> {{ 'ذخیره و ری‌استارت پنل' if lang == 'fa' else 'Save & Restart Panel' }}
+      </button>
+    </form>
+  </div>
+
   <!-- Optimize -->
   <div class="card">
     <div class="card-title" style="margin-bottom:20px"><i class="fas fa-rocket"></i> {{ 'بهینه‌سازی سیستم' if lang == 'fa' else 'System Optimization' }}</div>
@@ -122,6 +191,40 @@
 </div>
 
 <script>
+const sslToggle = document.getElementById('sslToggle');
+const sslFields = document.getElementById('sslFields');
+if (sslToggle && sslFields) {
+  sslToggle.addEventListener('change', () => {
+    sslFields.style.display = sslToggle.checked ? '' : 'none';
+  });
+}
+
+const networkForm = document.getElementById('networkForm');
+if (networkForm) {
+  networkForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const form = this;
+    const port = form.panel_port.value;
+    const sslOn = form.ssl_enabled.checked;
+    confirm2(
+      LANG === 'fa' ? 'ری‌استارت پنل' : 'Restart Panel',
+      LANG === 'fa'
+        ? `پنل روی پورت ${port} با ${sslOn ? 'HTTPS' : 'HTTP'} ری‌استارت می‌شود. آدرس اتصال شما ممکن است تغییر کند. ادامه؟`
+        : `The panel will restart on port ${port} over ${sslOn ? 'HTTPS' : 'HTTP'}. The address you connect with may change. Continue?`,
+      async () => {
+        showToast(LANG === 'fa' ? 'در حال ری‌استارت…' : 'Restarting…', true);
+        try {
+          await fetch('/settings', { method: 'POST', body: new FormData(form) });
+        } catch (e) { /* the panel may already be restarting mid-response */ }
+        const proto = sslOn ? 'https:' : 'http:';
+        setTimeout(() => {
+          location.href = `${proto}//${location.hostname}:${port}/settings`;
+        }, 3500);
+      }
+    );
+  });
+}
+
 async function runOptimize(action, btn) {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>';

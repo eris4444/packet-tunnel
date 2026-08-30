@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/Version-2.0.0-2080ff?style=for-the-badge&logo=linux" alt="Version">
+<img src="https://img.shields.io/badge/Version-3.1.0-2080ff?style=for-the-badge&logo=linux" alt="Version">
 <img src="https://img.shields.io/badge/Port-7777-00c97a?style=for-the-badge" alt="Port">
 <img src="https://img.shields.io/badge/Python-3.8+-yellow?style=for-the-badge&logo=python" alt="Python">
 <img src="https://img.shields.io/badge/License-MIT-blueviolet?style=for-the-badge" alt="License">
@@ -14,6 +14,20 @@
 [فارسی](./Readme.fa.md) · [Telegram](https://t.me/erisrttg) · [Report Bug](https://github.com/eris4444/packet-tunnel/issues)
 
 </div>
+
+---
+
+## 🆕 What's new in v3.1.0
+
+- **🔔 Telegram now has its own page** — token, Chat ID and an optional **SOCKS5 proxy** live under a dedicated **Telegram** entry in the sidebar, not in Settings. The proxy exists because `api.telegram.org` is blocked from Iran: point it at a SOCKS5 proxy and every call to Telegram (DNS included) goes through it. A **Send Test Message** button confirms the setup works before you rely on it. Setup:
+  1. Message [@BotFather](https://t.me/BotFather) on Telegram, send `/newbot`, and copy the bot token it gives you.
+  2. Message your new bot once (anything), then open `https://api.telegram.org/bot<TOKEN>/getUpdates` in a browser and copy the `chat.id` value — that's your Chat ID.
+  3. Paste both into the **Telegram** page. If Telegram isn't reachable directly from your server, also fill in a SOCKS5 proxy host/port. Save, then hit **Send Test Message**.
+- **🔒 HTTPS + changeable port from Settings** — a new "Panel Network / HTTPS" card lets you paste a TLS certificate and private key, or just change the port. The pair is validated (`ssl.SSLContext.load_cert_chain`) **before** anything is written or the panel restarts, so a mismatched or malformed cert can't take the panel down. Saving restarts the panel service automatically.
+- **🔐 bcrypt password hashing** — passwords are now stored with bcrypt instead of unsalted SHA-256. **Migration is automatic**: the first time you log in after upgrading, your existing password is silently re-hashed with bcrypt and saved — no action needed, nothing to run by hand.
+- **📊 7-day traffic history** — a new chart on the dashboard shows download/upload throughput over the past week, sampled every 60 seconds into a local SQLite database (`data/traffic.db`).
+- **🔔 Telegram alerts** — get a message the instant any node goes offline (see above for setup).
+- **📱 Mobile-responsive layout** — the sidebar collapses behind a hamburger menu below 768px, and dashboard cards, the two-column layout sections, and the Nodes grid all stack cleanly on phone-sized screens.
 
 ---
 
@@ -35,6 +49,10 @@
 | 🚀 **systemd Integration** | Auto-start on boot, managed by systemd |
 | 📦 **Paqet Installer** | Install / update Paqet binary directly from the UI |
 | 🔧 **Network Optimizer** | sysctl tuning + BBR congestion control — one click |
+| 🖥 **Nodes** | Watch every panel's CPU, RAM and traffic from one panel, over a read-only token |
+| 📊 **Traffic History** | 7-day download/upload chart, sampled every 60s into SQLite |
+| 🔔 **Telegram Alerts** | Its own page — token, Chat ID, optional SOCKS5 proxy, test button |
+| 🔒 **HTTPS / Port** | Paste a cert + key or change the panel port, straight from Settings |
 
 ---
 
@@ -46,7 +64,7 @@ Run this on your server **as root**:
 bash <(curl -fsSL https://raw.githubusercontent.com/eris4444/packet-tunnel/main/install.sh)
 ```
 
-After installation you will see:
+The installer's very first step asks you to choose a **username and password**; the rest runs unattended. When it finishes you'll see:
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
@@ -57,25 +75,23 @@ After installation you will see:
   ┌──────────────────────────────────────────────────────────┐
   │  URL           : http://<YOUR-IP>:7777                   │
   │  Username      : admin                                   │
-  │  Password      : xK9#mR2!pL7vQ4nJ                       │
+  │  Password      : (the one you chose)                     │
   └──────────────────────────────────────────────────────────┘
-
-  ⚠️  Save your password — it won't be shown again!
 ```
 
-> **Note:** The password is randomly generated at install time. Save it immediately.
+> **Unattended install** (no prompts): `PANEL_USERNAME=admin PANEL_PASSWORD=yourpassword bash install.sh` — without a terminal available at all, a random password is generated and printed once instead.
 
 ---
 
 ## 🗂 File Structure
 
-All files are **flat** in the root of the repository — no subdirectories:
+All source files are **flat** in the root of the repository — no subdirectories:
 
 ```
 packet-tunnel/
 ├── install.sh           ← one-command installer
 ├── app.py               ← Flask backend (template_folder = same dir)
-├── requirements.txt     ← flask · pyyaml · gunicorn
+├── requirements.txt     ← flask · pyyaml · gunicorn · bcrypt · requests · PySocks
 ├── base.html            ← shared layout: sidebar + header
 ├── login.html
 ├── dashboard.html
@@ -84,16 +100,21 @@ packet-tunnel/
 ├── add_server.html
 ├── add_client.html
 ├── settings.html
+├── nodes.html            ← fleet monitoring UI
+├── telegram.html         ← Telegram alert + SOCKS5 proxy settings
 ├── README.md            ← this file (English)
 └── README.fa.md         ← Persian version
 ```
 
-After installation, all files are copied to `/opt/paqet-panel/` on your server:
+After installation, panel files are copied to `/opt/paqet-panel/`. A `data/` subdirectory is created there at runtime for the traffic-history database — it isn't part of the installer bundle:
 
 ```
 /opt/paqet-panel/         ← panel files (flat)
+└── data/
+    └── traffic.db        ← 7-day traffic history (created at runtime)
 /etc/paqet-panel/
-└── config.json           ← credentials & theme/language settings
+├── config.json           ← credentials, theme/language, node token, Telegram settings
+└── nodes.json            ← nodes this panel is watching (as a hub)
 /etc/paqet/
 └── <name>.yaml           ← tunnel configs
 /etc/systemd/system/
@@ -118,9 +139,9 @@ Browser  ──────►  gunicorn (0.0.0.0:7777)
 ```
 
 - **Flask** serves all HTML pages from the same flat directory (`template_folder='.'`)
-- **Gunicorn** with 2 workers binds to `0.0.0.0:7777` (accessible from any IP)
+- **systemd** starts `start.sh`, a small wrapper that reads the port and HTTPS settings out of `config.json` before launching **gunicorn** (2 workers) — so a port change or HTTPS toggle from Settings takes effect on the next restart without editing the systemd unit
 - **systemd** manages both the panel service and all tunnel services
-- **Credentials** are stored in `/etc/paqet-panel/config.json` as a SHA-256 hash
+- **Credentials** are stored in `/etc/paqet-panel/config.json` as a bcrypt hash
 
 ---
 
@@ -177,14 +198,16 @@ Tunnel configs in `/etc/paqet/` and tunnel services are **left intact**.
 
 ---
 
-## 🗝 Default Credentials
+## 🗝 Credentials
 
-| Field | Value |
-|---|---|
-| Username | `admin` |
-| Password | *Auto-generated at install — shown once in terminal* |
+The installer asks you to choose a username and password during setup (step "Panel Credentials") — nothing is auto-generated unless the install is unattended (no terminal), in which case a random password is generated and printed once.
 
-Change both from **Settings → Security** inside the panel after first login.
+For a scripted install without prompts:
+```bash
+PANEL_USERNAME=admin PANEL_PASSWORD=yourpassword bash install.sh
+```
+
+Change either one later from **Settings → Security** inside the panel.
 
 ---
 

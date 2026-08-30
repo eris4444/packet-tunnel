@@ -375,6 +375,9 @@ body::after {
 /* ══════════════════  CONTENT  ══════════════════ */
 .content { padding: 30px; flex: 1; max-width: 1560px; width: 100%; }
 
+/* ══════════════════  TWO-COLUMN LAYOUT  ══════════════════ */
+.two-col-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+
 /* ══════════════════  CARDS  ══════════════════ */
 .card {
   position: relative;
@@ -728,6 +731,7 @@ textarea.form-control { resize: vertical; font-family: var(--font-mono); font-si
   .content { padding: 18px 16px; }
   .card { padding: 18px; border-radius: var(--radius); }
   .form-row, .form-row-3 { grid-template-columns: 1fr; }
+  .two-col-grid { grid-template-columns: 1fr; gap: 16px; }
   .stats-grid { grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 12px; }
   .stat-card { padding: 16px; }
   .stat-value { font-size: 1.35rem; }
@@ -831,14 +835,14 @@ async function apiCall(url, method='POST', data=null) {
     'add_client': 'Add Client', 'settings': 'Settings', 'logout': 'Logout',
     'overview': 'Overview', 'manage': 'Manage', 'configure': 'Configure',
     'system': 'SYSTEM', 'tunnel': 'TUNNEL', 'admin': 'Administrator',
-    'optimize': 'Optimize', 'nodes': 'Nodes', 'fleet': 'FLEET'
+    'optimize': 'Optimize', 'nodes': 'Nodes', 'fleet': 'FLEET', 'telegram': 'Telegram'
   },
   'fa': {
     'dashboard': 'داشبورد', 'services': 'سرویس‌ها', 'add_server': 'افزودن سرور',
     'add_client': 'افزودن کلاینت', 'settings': 'تنظیمات', 'logout': 'خروج',
     'overview': 'نمای کلی', 'manage': 'مدیریت', 'configure': 'پیکربندی',
     'system': 'سیستم', 'tunnel': 'تانل', 'admin': 'مدیر',
-    'optimize': 'بهینه‌سازی', 'nodes': 'نودها', 'fleet': 'ناوگان'
+    'optimize': 'بهینه‌سازی', 'nodes': 'نودها', 'fleet': 'ناوگان', 'telegram': 'تلگرام'
   }
 } %}
 
@@ -849,7 +853,7 @@ async function apiCall(url, method='POST', data=null) {
       <div class="brand-icon"><i class="fas fa-network-wired"></i></div>
       <div class="brand-text">
         <div class="name">Erisrtg Panel</div>
-        <div class="ver">Packet Tunnel v2.0.0</div>
+        <div class="ver">Packet Tunnel v3.1.0</div>
       </div>
     </div>
   </div>
@@ -880,6 +884,9 @@ async function apiCall(url, method='POST', data=null) {
     </a>
 
     <div class="nav-section">{{ t[lang]['admin'] }}</div>
+    <a href="/telegram" class="nav-item {% if active == 'telegram' %}active{% endif %}">
+      <i class="fab fa-telegram"></i> {{ t[lang]['telegram'] }}
+    </a>
     <a href="/settings" class="nav-item {% if active == 'settings' %}active{% endif %}">
       <i class="fas fa-cog"></i> {{ t[lang]['settings'] }}
     </a>
@@ -941,8 +948,8 @@ async function apiCall(url, method='POST', data=null) {
   {% with messages = get_flashed_messages() %}
   {% if messages %}
     {% for msg in messages %}
-    <div class="alert {% if 'wrong' in msg or 'short' in msg or 'mismatch' in msg %}alert-error{% else %}alert-success{% endif %} mt-4">
-      <i class="fas {% if 'wrong' in msg or 'short' in msg %}fa-exclamation-circle{% else %}fa-check-circle{% endif %}"></i>
+    <div class="alert {% if 'wrong' in msg or 'short' in msg or 'mismatch' in msg or 'invalid' in msg or 'missing' in msg %}alert-error{% else %}alert-success{% endif %} mt-4">
+      <i class="fas {% if 'wrong' in msg or 'short' in msg or 'invalid' in msg or 'missing' in msg %}fa-exclamation-circle{% else %}fa-check-circle{% endif %}"></i>
       {% if msg == 'password_changed' %}{% if lang == 'fa' %}رمز عبور با موفقیت تغییر یافت{% else %}Password changed successfully{% endif %}
       {% elif msg == 'wrong_password' %}{% if lang == 'fa' %}رمز عبور فعلی اشتباه است{% else %}Current password is incorrect{% endif %}
       {% elif msg == 'password_mismatch' %}{% if lang == 'fa' %}رمزهای جدید یکسان نیستند{% else %}New passwords do not match{% endif %}
@@ -951,6 +958,11 @@ async function apiCall(url, method='POST', data=null) {
       {% elif msg == 'username_short' %}{% if lang == 'fa' %}نام کاربری باید حداقل ۳ کاراکتر داشته باشد{% else %}Username must be at least 3 characters{% endif %}
       {% elif msg == 'theme_changed' %}{% if lang == 'fa' %}تم تغییر یافت{% else %}Theme changed{% endif %}
       {% elif msg == 'lang_changed' %}{% if lang == 'fa' %}زبان تغییر یافت{% else %}Language changed{% endif %}
+      {% elif msg == 'telegram_changed' %}{% if lang == 'fa' %}تنظیمات تلگرام ذخیره شد{% else %}Telegram settings saved{% endif %}
+      {% elif msg == 'network_changed' %}{% if lang == 'fa' %}تنظیمات شبکه ذخیره شد — پنل در حال ری‌استارت است{% else %}Network settings saved — the panel is restarting{% endif %}
+      {% elif msg == 'port_invalid' %}{% if lang == 'fa' %}شماره پورت نامعتبر است (باید بین ۱ تا ۶۵۵۳۵ باشد){% else %}Invalid port number (must be between 1 and 65535){% endif %}
+      {% elif msg == 'ssl_missing' %}{% if lang == 'fa' %}برای فعال‌سازی HTTPS باید هم گواهی و هم کلید خصوصی را وارد کنید{% else %}Both the certificate and the private key are required to enable HTTPS{% endif %}
+      {% elif msg == 'ssl_invalid' %}{% if lang == 'fa' %}گواهی یا کلید خصوصی نامعتبر است یا با هم تطابق ندارند{% else %}The certificate or private key is invalid, or they don't match{% endif %}
       {% else %}{{ msg }}{% endif %}
     </div>
     {% endfor %}

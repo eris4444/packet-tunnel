@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Telegram — Erisrtg Panel{% endblock %}
+{% block page_title %}{{ 'تلگرام' if session.get('lang') == 'fa' else 'Telegram' }}{% endblock %}
+
+{% block content %}
+{% set lang = session.get('lang', 'en') %}
+<div style="max-width:720px" class="fade-in">
+
+  <div class="card mb-6" style="margin-bottom:20px">
+    <div class="card-title" style="margin-bottom:20px">
+      <i class="fab fa-telegram"></i> {{ 'هشدار تلگرام' if lang == 'fa' else 'Telegram Alerts' }}
+    </div>
+
+    <p class="form-hint" style="margin-top:0;margin-bottom:16px">
+      {% if lang == 'fa' %}
+        وقتی یکی از نودها آفلاین شود، یک پیام به این ربات تلگرام فرستاده می‌شود. برای غیرفعال کردن، توکن و شناسه چت را خالی بگذارید.
+      {% else %}
+        You’ll get a message the moment any node goes offline. Leave the token and chat ID empty to disable.
+      {% endif %}
+    </p>
+
+    <form method="POST" action="/telegram" id="telegramForm">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">{{ 'توکن ربات' if lang == 'fa' else 'Bot Token' }}</label>
+          <input type="text" name="telegram_token" class="form-control" dir="ltr"
+                 value="{{ cfg.telegram_token }}" placeholder="123456789:AAExample-BotToken">
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ 'شناسه چت' if lang == 'fa' else 'Chat ID' }}</label>
+          <input type="text" name="telegram_chat_id" class="form-control" dir="ltr"
+                 value="{{ cfg.telegram_chat_id }}" placeholder="-1001234567890">
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="card-title" style="font-size:.85rem;margin-bottom:6px">
+        <i class="fas fa-globe"></i> {{ 'پروکسی SOCKS5 (اختیاری)' if lang == 'fa' else 'SOCKS5 Proxy (optional)' }}
+      </div>
+      <p class="form-hint" style="margin-top:0;margin-bottom:16px">
+        {% if lang == 'fa' %}
+          اگر api.telegram.org از این سرور مستقیم در دسترس نیست، آدرس یک پروکسی SOCKS5 را اینجا بده — تمام تماس‌های ربات با تلگرام از همان مسیر می‌رود (تفکیک DNS از طریق پروکسی هم انجام می‌شود). برای اتصال مستقیم، میزبان را خالی بگذار.
+        {% else %}
+          If api.telegram.org isn’t reachable directly from this server, point the bot at a SOCKS5 proxy — every call to Telegram goes through it (DNS is resolved through the proxy too). Leave the host empty to connect directly.
+        {% endif %}
+      </p>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">{{ 'میزبان پروکسی' if lang == 'fa' else 'Proxy Host' }}</label>
+          <input type="text" name="telegram_proxy_host" class="form-control" dir="ltr"
+                 value="{{ cfg.telegram_proxy_host }}" placeholder="127.0.0.1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ 'پورت پروکسی' if lang == 'fa' else 'Proxy Port' }}</label>
+          <input type="number" name="telegram_proxy_port" class="form-control" dir="ltr"
+                 value="{{ cfg.telegram_proxy_port }}" placeholder="1080" min="1" max="65535">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">{{ 'نام کاربری پروکسی (اختیاری)' if lang == 'fa' else 'Proxy Username (optional)' }}</label>
+          <input type="text" name="telegram_proxy_username" class="form-control" dir="ltr"
+                 value="{{ cfg.telegram_proxy_username }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">{{ 'رمز پروکسی (اختیاری)' if lang == 'fa' else 'Proxy Password (optional)' }}</label>
+          <input type="password" name="telegram_proxy_password" class="form-control" dir="ltr"
+                 value="{{ cfg.telegram_proxy_password }}">
+        </div>
+      </div>
+
+      <div class="flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="fas fa-save"></i> {{ 'ذخیره' if lang == 'fa' else 'Save' }}
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="sendTestMessage(this)">
+          <i class="fas fa-paper-plane"></i> {{ 'ارسال پیام تست' if lang == 'fa' else 'Send Test Message' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+async function sendTestMessage(btn) {
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const r = await apiCall('/api/telegram/test', 'POST');
+    showToast(r.ok
+      ? (LANG === 'fa' ? 'پیام تست ارسال شد' : 'Test message sent')
+      : (r.error || (LANG === 'fa' ? 'ارسال ناموفق بود' : 'Send failed')), r.ok);
+  } catch (e) {
+    showToast(LANG === 'fa' ? 'خطا در ارسال' : 'Error sending message', false);
+  }
+  btn.disabled = false;
+  btn.innerHTML = orig;
+}
+</script>
+{% endblock %}

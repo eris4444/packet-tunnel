@@ -84,8 +84,22 @@
   </div>
 </div>
 
+<!-- TRAFFIC HISTORY -->
+<div class="card fade-in mb-6" style="margin-bottom:20px">
+  <div class="card-header">
+    <div class="card-title"><i class="fas fa-chart-line"></i> {{ 'روند ترافیک (۷ روز)' if lang == 'fa' else 'Traffic History (7 days)' }}</div>
+  </div>
+  <div style="position:relative;height:260px">
+    <canvas id="trafficChart"></canvas>
+    <div id="trafficEmpty" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--text-muted);font-size:.85rem">
+      <i class="fas fa-chart-line" style="font-size:2rem;opacity:.3"></i>
+      {{ 'هنوز داده‌ای ثبت نشده — کمی صبر کنید.' if lang == 'fa' else 'No data yet — check back in a minute.' }}
+    </div>
+  </div>
+</div>
+
 <!-- TWO COLUMN -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;" class="fade-in">
+<div class="two-col-grid fade-in">
 
   <!-- System Info -->
   <div class="card">
@@ -214,6 +228,7 @@
   {% endif %}
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script>
 // server hands us raw byte counters — render them in human units
 document.addEventListener('DOMContentLoaded', () => {
@@ -222,7 +237,71 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el) el.textContent = fmtBytes(parseInt(el.textContent, 10) || 0) + ' total';
   });
   refreshStats();
+  loadTrafficChart();
 });
+
+async function loadTrafficChart() {
+  const canvas = document.getElementById('trafficChart');
+  const empty = document.getElementById('trafficEmpty');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  let data = [];
+  try {
+    data = await (await fetch('/api/traffic/history?hours=168')).json();
+  } catch (e) {}
+
+  if (!Array.isArray(data) || data.length < 2) {
+    canvas.style.display = 'none';
+    if (empty) empty.style.display = 'flex';
+    return;
+  }
+
+  const cs = getComputedStyle(document.documentElement);
+  const accent = (cs.getPropertyValue('--accent-bright') || '#57a4ff').trim();
+  const cyan   = (cs.getPropertyValue('--cyan') || '#22d3ee').trim();
+  const muted  = (cs.getPropertyValue('--text-muted') || '#8aaccc').trim();
+  const grid   = (cs.getPropertyValue('--border-subtle') || 'rgba(255,255,255,.08)').trim();
+  const hex2rgba = (hex, a) => {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex);
+    if (!m) return hex;
+    const n = parseInt(m[1], 16);
+    return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+  };
+
+  const locale = LANG === 'fa' ? 'fa-IR' : 'en-US';
+  const labels = data.map(p => new Date(p.time).toLocaleString(locale,
+    { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
+
+  new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: LANG === 'fa' ? 'دانلود (Mbps)' : 'Download (Mbps)',
+          data: data.map(p => p.rx_mbps),
+          borderColor: accent, backgroundColor: hex2rgba(accent, .15),
+          fill: true, tension: .35, pointRadius: 0, borderWidth: 2,
+        },
+        {
+          label: LANG === 'fa' ? 'آپلود (Mbps)' : 'Upload (Mbps)',
+          data: data.map(p => p.tx_mbps),
+          borderColor: cyan, backgroundColor: hex2rgba(cyan, .15),
+          fill: true, tension: .35, pointRadius: 0, borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: muted, usePointStyle: true, boxHeight: 6 } } },
+      scales: {
+        x: { ticks: { color: muted, maxTicksLimit: 8, autoSkip: true }, grid: { color: grid } },
+        y: { ticks: { color: muted, callback: v => v + ' Mbps' }, grid: { color: grid }, beginAtZero: true },
+      },
+    },
+  });
+}
 
 async function installPaqet(btn) {
   btn.disabled = true;
